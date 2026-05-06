@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export type BubbleToolArgs = {
   name: string;
   args: any;
@@ -6,16 +8,19 @@ export type BubbleToolArgs = {
 
 export default function BubbleTool({ name, result, args }: BubbleToolArgs) {
   const data = result ? JSON.parse(result) : undefined;
+  const [showResults, setShowResults] = useState(false);
   return (
     <div className="flex flex-col py-2">
       <div className="chat-tool">
-        <div className="text-gray-100">
+        <div
+          className="cursor-pointer text-[80%] text-gray-100"
+          onClick={() => setShowResults(!showResults)}
+        >
           Using tool [
           <span className="font-semibold text-blue-400">{name}</span>]
         </div>
-        {result !== undefined && (
-          <details className="mt-1">
-            <summary className="text-[110%] text-gray-300">View result</summary>
+        {showResults && result !== undefined && (
+          <div className="mt-1">
             <p className="py-2 text-white">Args:</p>
             <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
               {JSON.stringify(args)}
@@ -24,7 +29,7 @@ export default function BubbleTool({ name, result, args }: BubbleToolArgs) {
             <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
               {data}
             </pre>
-          </details>
+          </div>
         )}
       </div>
     </div>
