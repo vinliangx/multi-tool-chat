@@ -31,9 +31,9 @@ main {
 }
 
 .chat-box-wrapper {
-  @apply absolute bottom-4 left-0 w-screen items-center justify-center;
+  @apply absolute bottom-4 left-0 z-10 w-screen items-center justify-center;
   .chat-box {
-    @apply mx-auto w-[60vh] rounded-2xl border-slate-500 bg-linear-to-r from-slate-900 to-slate-800 p-4 shadow-2xl ring-1 shadow-slate-900 ring-slate-700;
+    @apply mx-auto rounded-2xl border-slate-500 bg-linear-to-r from-slate-900 to-slate-800 p-4 shadow-2xl ring-1 shadow-slate-900 ring-slate-700 md:w-[70vw];
   }
 
   &.new {
@@ -72,5 +72,5 @@ main {
 }
 
 aside {
-  @apply w-90 overflow-auto text-white;
+  @apply z-11 w-90 overflow-auto text-white max-md:hidden lg:visible;
 }

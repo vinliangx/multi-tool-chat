@@ -78,8 +78,8 @@ export function ChatBox({
 
       <div className="mt-4 mb-2 flex items-center justify-center">
         <div className="flex text-[70%]">
-          <div className="text-blue-400">SessionID:</div>
-          <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white">
+          <div className="text-blue-400 max-sm:hidden">SessionID:</div>
+          <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white max-sm:hidden">
             {sessionId ?? "(New!)"}
           </div>
           <label className="relative ml-10 inline-flex cursor-pointer items-center">
