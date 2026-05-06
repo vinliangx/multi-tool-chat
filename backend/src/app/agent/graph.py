@@ -81,8 +81,9 @@ cache: SemanticCache | None = (
     SemanticCache(
         name="llm_cache",
         redis_url=settings.redis_url,
-        distance_threshold=0.001,
+        distance_threshold=0.09,
         vectorizer=_VECTORIZER,
+        ttl=5 * 60,
     )
     if _VECTORIZER is not None
     else None
@@ -127,7 +128,7 @@ def _route_after_agent_no_cache(state: AgentState) -> Literal["tools"] | str:
 
 def _cache_lookup_node(state: AgentState):
     prompt = state["messages"][-1].content
-    cached = cache.check(prompt=f"{_session_id()}:{prompt}")
+    cached = cache.check(prompt=f"{prompt}", distance_threshold=0.09)
     if cached:
         return {
             "messages": [
@@ -158,7 +159,7 @@ def _cache_store_node(state: AgentState):
 
     if not prompt or not assistant_msg:
         return {}
-    cache.store(prompt=f"{_session_id()}:{prompt}", response=assistant_msg)
+    cache.store(prompt=f"{prompt}", response=assistant_msg)
     return {}
 
 

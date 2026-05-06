@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     ollama_summarizer_model: str = "qwen2.5:7b"
-    ollama_embedding_model: str = "nomic-embed-text:latest"
+    ollama_embedding_model: str = "embeddinggemma"
 
     aws_region: str = "us-east-1"
     sessions_table: str = "chat-sessions"

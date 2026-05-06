@@ -19,6 +19,8 @@ export type ChatBoxArgs = {
   files: FileUploadItem[];
   setFiles: (files: FileUploadItem[] | UpdateFilesState) => void;
   sessionId?: string | null;
+  reasoningExpanded: boolean;
+  setReasoningExpanded: (expanded: boolean) => void;
 };
 
 export function ChatBox({
@@ -32,6 +34,8 @@ export function ChatBox({
   messages,
   isNew,
   sessionId,
+  reasoningExpanded,
+  setReasoningExpanded,
 }: ChatBoxArgs) {
   let messageIndex = useRef(messages.length);
 
@@ -71,12 +75,26 @@ export function ChatBox({
           <div>Write me a question.</div>
         </div>
       )}
+
       <div className="mt-4 mb-2 flex items-center justify-center">
         <div className="flex text-[70%]">
           <div className="text-blue-400">SessionID:</div>
           <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white">
             {sessionId ?? "(New!)"}
           </div>
+          <label className="relative ml-10 inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              onClick={() => setReasoningExpanded(!reasoningExpanded)}
+              className="peer sr-only"
+            />
+
+            <div className="peer h-4 w-8 rounded-full bg-gray-500 peer-checked:bg-blue-600 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:inset-s-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white rtl:peer-checked:after:-translate-x-full"></div>
+
+            <span className="ms-3 text-xs font-medium text-gray-400 italic">
+              Keep reasoning expanded
+            </span>
+          </label>
         </div>
       </div>
       <div className="chat-box">

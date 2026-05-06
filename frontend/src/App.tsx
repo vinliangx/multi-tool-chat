@@ -42,6 +42,7 @@ export function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [messages, setMessages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileUploadItem[]>([]);
+  const [keepReasoningExpanded, setKeepReasoningExpanded] = useState(false);
   const [confirm, setConfirm] = useState<{
     message: string;
     onConfirm: () => void;
@@ -300,7 +301,12 @@ export function App() {
         <div className="chat-contents rounded-tl-3xl rounded-bl-3xl">
           {items.map((it, i) => {
             if (it.kind === "reasoning_token")
-              return <BubbleReasoning text={it.text} />;
+              return (
+                <BubbleReasoning
+                  text={it.text}
+                  reasoningExpanded={keepReasoningExpanded}
+                />
+              );
             if (it.kind === "user")
               return <BubbleUser key={i} text={it.text} label="Me" />;
             if (it.kind === "assistant")
@@ -333,6 +339,8 @@ export function App() {
             setInput={setInput}
             send={send}
             isNew={items.length == 0}
+            reasoningExpanded={keepReasoningExpanded}
+            setReasoningExpanded={setKeepReasoningExpanded}
           />
         </div>
       </main>
