@@ -47,6 +47,6 @@ def _build_ollama(model_name: str) -> BaseChatModel:
     return ChatOllama(
         model=model_name,
         base_url=settings.ollama_base_url,
-        temperature=0.9,
+        temperature=0,
         reasoning=True,
     )

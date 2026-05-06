@@ -26,7 +26,7 @@ async def _run(latitude: float, longitude: float) -> str:
 def factory(session_id_provider):
     return make_session_tool(
         name="weather_lookup",
-        description="Get current weather + hourly temperature forecast for a lat/lon via open-meteo (no key needed).",
+        description="Get current weather + hourly temperature forecast for a lat/lon via open-meteo (no key needed). It doesn't have to be precise.",
         args_schema=WeatherArgs,
         runner=_run,
         session_id_provider=session_id_provider,
