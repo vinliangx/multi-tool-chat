@@ -38,7 +38,6 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const sessionRef = useRef<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [messages, setMessages] = useState<string[]>([]);
@@ -69,7 +68,7 @@ export function App() {
       .then((data) => setSessions(data));
   };
 
-  useEffect(loadSessions, [sessionRef, activeSessionId]);
+  useEffect(loadSessions, [activeSessionId]);
 
   const send = useCallback(async () => {
     const textMessages: string[] = [input.trim()];
@@ -97,7 +96,7 @@ export function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          session_id: sessionRef.current,
+          session_id: activeSessionId,
           message: textMessages.join("\n\n"),
           files: files,
         }),
@@ -114,7 +113,6 @@ export function App() {
 
       const handleEvent = (evt: string, data: Record<string, any>) => {
         if (evt === "session") {
-          sessionRef.current = data.session_id;
           setActiveSessionId(data.session_id);
         } else if (evt === "reasoning_token") {
           setItems((xs) => {
@@ -223,7 +221,6 @@ export function App() {
   const doReuseSession = async (session_id: string) => {
     abortRef.current?.abort();
     setBusy(false);
-    sessionRef.current = session_id;
     setActiveSessionId(session_id);
     setItems([]);
     setMessages([]);
@@ -246,7 +243,6 @@ export function App() {
       () => {
         abortRef.current?.abort();
         setBusy(false);
-        sessionRef.current = null;
         setActiveSessionId(null);
         setItems([]);
         setMessages([]);
@@ -257,10 +253,9 @@ export function App() {
 
   const deleteSession = (session_id: string) => {
     fetch(`/sessions?session_id=${session_id}`, { method: "DELETE" });
-    if (sessionRef.current == session_id) {
+    if (activeSessionId == session_id) {
       abortRef.current?.abort();
       setBusy(false);
-      sessionRef.current = null;
       setActiveSessionId(null);
       setItems([]);
       setMessages([]);
@@ -327,19 +322,19 @@ export function App() {
           <ChatLoadingIndicator loading={loadingHistory || busy} />
 
           <div ref={bottomRef} className="mb-10 h-30" />
+          <ChatBox
+            sessionId={activeSessionId}
+            inputRef={inputRef}
+            input={input}
+            files={files}
+            setFiles={setFiles}
+            busy={busy}
+            messages={messages}
+            setInput={setInput}
+            send={send}
+            isNew={items.length == 0}
+          />
         </div>
-        <ChatBox
-          sessionId={activeSessionId}
-          inputRef={inputRef}
-          input={input}
-          files={files}
-          setFiles={setFiles}
-          busy={busy}
-          messages={messages}
-          setInput={setInput}
-          send={send}
-          isNew={items.length == 0}
-        />
       </main>
     </div>
   );

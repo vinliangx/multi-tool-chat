@@ -55,7 +55,6 @@ async def session_messages(session_id: str) -> list[dict]:
     tool_item_indices: dict[str, int] = {}
 
     for msg in messages:
-        print(msg)
         if isinstance(msg, HumanMessage):
             items.append({"kind": "user", "text": str(msg.content)})
         elif isinstance(msg, AIMessage):

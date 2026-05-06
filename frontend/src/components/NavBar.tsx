@@ -37,8 +37,8 @@ export default function NavBar({
                       : "flex text-[90%]"
                   }
                 >
-                  {it.title.length > 50
-                    ? it.title.substring(0, 50) + "..."
+                  {it.title.length > 80
+                    ? it.title.substring(0, 80) + "..."
                     : it.title}
                 </div>
                 <div className="flex text-[80%] text-slate-400">

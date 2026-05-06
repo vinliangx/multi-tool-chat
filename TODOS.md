@@ -14,3 +14,4 @@
 
 - [x] Pants build
 - [ ] AWS Deployment
+- [ ] Fix Responsiveness

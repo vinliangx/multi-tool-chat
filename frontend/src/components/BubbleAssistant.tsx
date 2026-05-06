@@ -10,7 +10,7 @@ export default function BubbleAssistant({ text, source }: BubbleAssistantArgs) {
         <div className="chat-markdown-safe">
           <MarkdownPreview remarkPlugins={[remarkGfm]}>{text}</MarkdownPreview>
         </div>
-        <div className="pt flex items-end pb-4 text-[75%]">
+        <div className="pt mt-4 flex items-end pb-4 text-[75%]">
           <div className="flex-1 self-end text-right">Source:</div>
           <div className="ml-2 flex rounded-2xl bg-gray-200 px-2 font-bold text-black">
             {source}
