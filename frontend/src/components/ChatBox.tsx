@@ -1,0 +1,127 @@
+import { faComments, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { KeyboardEvent, Ref, useEffect, useRef } from "react";
+import FileItem from "./FileItem";
+import FileUpload, { FileUploadItem } from "./FileUpload";
+
+export type UpdateFilesState = (
+  prevFiles: FileUploadItem[],
+) => FileUploadItem[];
+
+export type ChatBoxArgs = {
+  inputRef: Ref<HTMLTextAreaElement>;
+  input: string | undefined;
+  setInput: (val: string) => void;
+  busy: boolean;
+  send: () => void;
+  messages: string[];
+  isNew: boolean;
+  files: FileUploadItem[];
+  setFiles: (files: FileUploadItem[] | UpdateFilesState) => void;
+  sessionId?: string | null;
+};
+
+export function ChatBox({
+  inputRef,
+  input,
+  setInput,
+  files,
+  setFiles,
+  busy,
+  send,
+  messages,
+  isNew,
+  sessionId,
+}: ChatBoxArgs) {
+  let messageIndex = useRef(messages.length);
+
+  const inputChatKeyPress = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      send();
+    }
+    if (e.key === "ArrowUp") {
+      if (messageIndex.current > 0) {
+        setInput(messages[--messageIndex.current]);
+        e.preventDefault();
+      }
+    }
+    if (e.key === "ArrowDown") {
+      if (messageIndex.current < messages.length - 1) {
+        setInput(messages[++messageIndex.current]);
+        e.preventDefault();
+      } else {
+        setInput("");
+      }
+    }
+  };
+  function filesUploaded(newFiles: FileUploadItem[]) {
+    setFiles(files.concat(newFiles));
+  }
+  useEffect(() => {
+    if (input == "") messageIndex.current = messages.length;
+  }, [input, messages]);
+  return (
+    <div className={isNew ? "chat-box-wrapper new" : "chat-box-wrapper"}>
+      {isNew && (
+        <div className="mb-10 text-center text-slate-400">
+          <div className="text-3xl font-bold">
+            <FontAwesomeIcon icon={faComments} className="mr-2" />
+            Start here!
+          </div>
+          <div>Write me a question.</div>
+        </div>
+      )}
+      <div className="mt-4 mb-2 flex items-center justify-center">
+        <div className="flex text-[70%]">
+          <div className="text-blue-400">SessionID:</div>
+          <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white">
+            {sessionId ?? "(New!)"}
+          </div>
+        </div>
+      </div>
+      <div className="chat-box">
+        <div className="flex gap-4">
+          <FileUpload filesUploaded={filesUploaded} />
+          <div className="flex-2 items-center justify-center">
+            <textarea
+              id="chatBox"
+              name="chatBox"
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={inputChatKeyPress}
+              placeholder={busy ? "Thinking" : "Ask anything"}
+              disabled={busy}
+              className="chat-input"
+            />
+            {files.length > 0 && (
+              <div className="mt-1 flex gap-2">
+                {files.map((f, index) => {
+                  return (
+                    <FileItem
+                      key={index}
+                      file={f}
+                      onRemove={() => {
+                        setFiles((prevFiles: FileUploadItem[]) =>
+                          prevFiles.filter((item) => item.url !== f.url),
+                        );
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={send}
+            disabled={busy || !input?.trim()}
+            className="rounded-xl bg-linear-120 from-blue-800 to-blue-600 px-4 py-2 text-sm text-blue-100 shadow-lg shadow-blue-900 hover:from-blue-700 hover:to-blue-500 disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faPaperPlane} className="pr-2" />
+            SEND
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,9 @@
+python_tests(
+    name="tests",
+    resolve="python-default",
+    dependencies=[
+        "backend/src/app",
+        "backend/src/app/session",
+        "backend/src/app/agent",
+    ],
+)

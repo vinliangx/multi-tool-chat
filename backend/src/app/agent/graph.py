@@ -1,0 +1,317 @@
+"""LangGraph agent.
+
+Flow:
+  start -> agent -> (tools? -> agent) -> end
+
+The summarizer is *not* a node here — it's invoked from inside the
+session manager whenever a tool result is too large. That keeps the
+graph simple and the summarization transparent to the agent: every
+tool result it ever sees is already context-budget-friendly, with a
+recall handle if it wants the raw bytes.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Annotated, AsyncIterator, Literal, TypedDict
+
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.redis import AsyncRedisSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from redisvl.extensions.cache.llm import SemanticCache
+
+from app.agent.llm import build_chat_llm
+from app.agent.vectorizer import build_vectorizer_llm
+from app.config import settings
+from app.tools import build_tools
+
+_current_session: ContextVar[str] = ContextVar("session_id", default="")
+
+
+def _session_id() -> str:
+    return _current_session.get()
+
+
+@contextmanager
+def _bind_session(session_id: str):
+    token = _current_session.set(session_id)
+    try:
+        yield
+    finally:
+        _current_session.reset(token)
+
+
+class AgentState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+    cached: bool
+
+
+_TOOLS = build_tools(_session_id)
+_LLM = build_chat_llm().bind_tools(_TOOLS)
+_VECTORIZER = build_vectorizer_llm()  # None when provider has no embedding API
+
+_SYSTEM = SystemMessage(
+    content=(
+        "You are a helpful and very enthusiastic assistant with access to tools. "
+        "Tool results are returned as JSON metadata: {handle, tool, summary, ...}. "
+        "If the summary is enough, answer from it. "
+        "If you need the full raw output, call the `recall` tool with the handle. "
+        "Any destructive action requires confirmation, before calling any tool. "
+        "IMPORTANT: Always call `read_memory` before calling `save_memory` so you "
+        "can merge existing facts, likes, and dislikes with any new information. "
+        "Dont `save_memory` if nothing has change, compare before calling the tool."
+        "If nothing exists from this user, save it, and ask more questions about facts, likes or dislikes"
+    )
+)
+
+
+cache: SemanticCache | None = (
+    SemanticCache(
+        name="llm_cache",
+        redis_url=settings.redis_url,
+        distance_threshold=0.001,
+        vectorizer=_VECTORIZER,
+    )
+    if _VECTORIZER is not None
+    else None
+)
+
+
+def _inject_file_urls(messages: list[AnyMessage]) -> list[AnyMessage]:
+    out = []
+    for msg in messages:
+        files = (
+            msg.additional_kwargs.get("files")
+            if isinstance(msg, HumanMessage)
+            else None
+        )
+        if files:
+            file_lines = "\n".join(f"- {f['name']}: {f['url']}" for f in files)
+            msg = HumanMessage(
+                content=f"{msg.content}\n\nAttached files (use these URLs with tools):\n{file_lines}",
+            )
+        out.append(msg)
+    return out
+
+
+async def _agent_node(state: AgentState) -> dict:
+    resp = await _LLM.ainvoke([_SYSTEM, *_inject_file_urls(state["messages"])])
+    return {"messages": [resp]}
+
+
+def _route_after_agent(state: AgentState) -> Literal["tools", "cache_store"]:
+    last = state["messages"][-1]
+    if isinstance(last, AIMessage) and last.tool_calls:
+        return "tools"
+    return "cache_store"
+
+
+def _route_after_agent_no_cache(state: AgentState) -> Literal["tools"] | str:
+    last = state["messages"][-1]
+    if isinstance(last, AIMessage) and last.tool_calls:
+        return "tools"
+    return END
+
+
+def _cache_lookup_node(state: AgentState):
+    prompt = state["messages"][-1].content
+    cached = cache.check(prompt=f"{_session_id()}:{prompt}")
+    if cached:
+        return {
+            "messages": [
+                AIMessage(
+                    content=cached[0]["response"],
+                )
+            ],
+            "cached": True,
+        }
+    return {"cached": False}
+
+
+def _cache_store_node(state: AgentState):
+    messages = state["messages"]
+
+    prompt = None
+    assistant_msg = None
+
+    for m in reversed(messages):
+        if isinstance(m, AIMessage) and m.tool_calls:
+            break
+        elif isinstance(m, AIMessage) and not m.tool_calls:
+            assistant_msg = m.content
+        elif isinstance(m, HumanMessage):
+            prompt = m.content
+        if prompt and assistant_msg:
+            break
+
+    if not prompt or not assistant_msg:
+        return {}
+    cache.store(prompt=f"{_session_id()}:{prompt}", response=assistant_msg)
+    return {}
+
+
+def _route_after_cache(state: AgentState):
+    if state.get("cached"):
+        return END
+    return "agent"
+
+
+def _build_graph(checkpointer: BaseCheckpointSaver):
+    g = StateGraph(AgentState)
+    g.add_node("agent", _agent_node)
+    g.add_node("tools", ToolNode(_TOOLS))
+    g.add_edge("tools", "agent")
+
+    if cache is not None:
+        g.add_node("cache_lookup", _cache_lookup_node)
+        g.add_node("cache_store", _cache_store_node)
+        g.add_edge(START, "cache_lookup")
+        g.add_conditional_edges(
+            "cache_lookup", _route_after_cache, {END: END, "agent": "agent"}
+        )
+        g.add_conditional_edges(
+            "agent",
+            _route_after_agent,
+            {"tools": "tools", "cache_store": "cache_store"},
+        )
+        g.add_edge("cache_store", END)
+    else:
+        g.add_edge(START, "agent")
+        g.add_conditional_edges(
+            "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
+        )
+
+    return g.compile(checkpointer=checkpointer)
+
+
+_graph = None
+_checkpointer: AsyncRedisSaver | None = None
+_graph_lock = asyncio.Lock()
+
+
+async def _get_graph():
+    global _graph, _checkpointer
+    if _graph is None:
+        async with _graph_lock:
+            if _graph is None:
+                _checkpointer = AsyncRedisSaver(redis_url=settings.redis_url)
+                await _checkpointer.asetup()
+                _graph = _build_graph(_checkpointer)
+    return _graph
+
+
+async def delete_session_checkpoints(session_id: str) -> None:
+    """Remove all LangGraph checkpoint data for a session."""
+    await _get_graph()
+    if _checkpointer is not None:
+        await _checkpointer.adelete_thread(session_id)
+
+
+async def get_session_messages(session_id: str) -> list[AnyMessage]:
+    """Return the full message history for a session from the LangGraph checkpoint."""
+    await _get_graph()
+    config = {"configurable": {"thread_id": session_id}}
+    checkpoint_tuple = await _checkpointer.aget_tuple(config)
+    if checkpoint_tuple is None:
+        return []
+    return checkpoint_tuple.checkpoint.get("channel_values", {}).get("messages", [])
+
+
+async def run_agent_stream(
+    session_id: str, user_message: str, files: list[dict] | None
+) -> AsyncIterator[dict]:
+    """Yield events from a single chat turn.
+
+    Event types:
+      token       — incremental assistant text (currently emitted as one block)
+      tool_call   — agent invoked a tool {name, args, id}
+      tool_result — tool's session-manager view {name, view}
+      message     — final assistant message
+    """
+    initial: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=user_message,
+                additional_kwargs={"files": files} if files else {},
+            )
+        ],
+    }
+    config = {
+        "configurable": {
+            "thread_id": session_id,
+        }
+    }
+
+    graph = await _get_graph()
+
+    with _bind_session(session_id):
+        async for stream_type, event in graph.astream(
+            initial, stream_mode=["updates", "messages"], config=config
+        ):
+            if stream_type == "messages":
+                msg_chunk, metadata = event
+                if (
+                    isinstance(msg_chunk, AIMessageChunk)
+                    and isinstance(msg_chunk.content, str)
+                    and msg_chunk.content
+                    and metadata.get("langgraph_node") == "agent"
+                ):
+                    yield {"type": "token", "data": {"content": msg_chunk.content}}
+                elif (
+                    isinstance(msg_chunk, AIMessageChunk)
+                    and isinstance(msg_chunk.content, str)
+                    and "reasoning_content" in msg_chunk.additional_kwargs
+                ):
+                    yield {
+                        "type": "reasoning_token",
+                        "data": {
+                            "content": msg_chunk.additional_kwargs["reasoning_content"]
+                        },
+                    }
+            elif stream_type == "updates":
+                for node_name, update in event.items():
+                    if update is not None:
+                        for msg in update.get("messages", []):
+                            if isinstance(msg, AIMessage):
+                                for tc in msg.tool_calls or []:
+                                    yield {
+                                        "type": "tool_call",
+                                        "data": {
+                                            "id": tc["id"],
+                                            "name": tc["name"],
+                                            "args": tc["args"],
+                                        },
+                                    }
+                                if msg.content:
+                                    yield {
+                                        "type": "message",
+                                        "data": {
+                                            "role": "assistant",
+                                            "content": msg.content,
+                                            "source": (
+                                                "CACHE"
+                                                if node_name == "cache_lookup"
+                                                else "LLM"
+                                            ),
+                                        },
+                                    }
+                            elif isinstance(msg, ToolMessage):
+                                yield {
+                                    "type": "tool_result",
+                                    "data": {
+                                        "tool_call_id": msg.tool_call_id,
+                                        "content": msg.content,
+                                    },
+                                }

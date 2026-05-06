@@ -1,0 +1,43 @@
+[GLOBAL]
+pants_version = "2.31.0"
+backend_packages = [
+  "pants.backend.python",
+  "pants.backend.python.lint.black",
+  "pants.backend.docker",
+  "pants.backend.shell",
+  "pants.backend.experimental.terraform",
+  "pants.backend.experimental.javascript.lint.prettier",
+]
+
+[source]
+root_patterns = ["/backend/src/","/backend/","/frontend/","/infra/"]
+
+[python]
+interpreter_constraints = ["==3.14.*"]
+enable_resolves = true
+
+[python.resolves]
+python-default = "backend/3rdparty/python-default.lock"
+
+[pytest]
+install_from_resolve = "python-default"
+
+[anonymous-telemetry]
+enabled = false
+
+[docker]
+use_buildx = true
+default_context_root = "./"
+tools = [
+  'docker-credential-desktop'
+]
+
+[docker.registries.my-registry]
+address = "docker.io/vinrosa"
+default = true
+
+[terraform-validate]
+skip = false
+
+[terraform-fmt]
+skip = false

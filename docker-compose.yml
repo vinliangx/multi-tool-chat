@@ -1,0 +1,110 @@
+services:
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   healthcheck:
+  #     test: ["CMD", "ollama", "list"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 20
+
+  # ollama-pull:
+  #   image: ollama/ollama:latest
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
+  #   environment:
+  #     OLLAMA_HOST: http://ollama:11434
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command: ["ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"]
+  #   restart: "no"
+
+  backend:
+    build: ./backend
+    develop:
+      watch:
+        - path: ./backend/src
+          action: rebuild
+        - path: ./backend/3rdparty
+          action: rebuild
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      # OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      OLLAMA_SUMMARIZER_MODEL: ${OLLAMA_SUMMARIZER_MODEL:-qwen2.5:7b}
+      USE_AWS_STORE: "0"
+      USE_REDIS_STORE: "1"
+      REDIS_URL: "redis://redis:6379"
+      CORS_ORIGINS: '["http://localhost:5173"]'
+      INTERNAL_S3_ENDPOINT_URL: http://s3:9000
+      EXTERNAL_S3_ENDPOINT_URL: http://localhost:9444
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 10s
+      start_period: 5s
+
+    depends_on:
+      redis:
+        condition: service_started
+    # depends_on:
+    # ollama-pull:
+    # condition: service_completed_successfully
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    develop:
+      watch:
+        - path: ./frontend/src
+          action: sync
+          target: /app/src
+        - path: ./frontend/package.json
+          action: rebuild
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  s3:
+    image: scireum/s3-ninja:8.7.0
+    ports:
+      - 9444:9000
+    volumes:
+      - ./s3data:/data
+      - ./s3data/multipart:/home/sirius/multipart
+      - ./s3data/s3ninja-logs:/home/sirius/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/ui"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  ollama-data:
+  redis-data:
+  s3ninja-logs:
+    driver: local
