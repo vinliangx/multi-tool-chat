@@ -297,37 +297,41 @@ export function App() {
         />
       </aside>
 
-      <main className="flex-1 flex-col gap-3">
-        <div className="chat-contents rounded-tl-3xl rounded-bl-3xl">
-          {items.map((it, i) => {
-            if (it.kind === "reasoning_token")
-              return (
-                <BubbleReasoning
-                  text={it.text}
-                  reasoningExpanded={keepReasoningExpanded}
-                />
-              );
-            if (it.kind === "user")
-              return <BubbleUser key={i} text={it.text} label="Me" />;
-            if (it.kind === "assistant")
-              return (
-                <BubbleAssistant key={i} text={it.text} source={it.source} />
-              );
-            if (it.kind === "streaming")
-              return <BubbleAssistant key={i} text={it.text} source="LLM" />;
-            return (
-              <BubbleTool
-                key={i}
-                result={it.call.result}
-                args={it.call.args}
-                name={it.call.name}
-              />
-            );
-          })}
+      <main className="flex flex-1 flex-col gap-3">
+        <div className={`chat-contents md:rounded-tl-3xl md:rounded-bl-3xl${items.length === 0 ? " justify-center" : ""}`}>
+          {items.length > 0 && (
+            <div className="chat-messages">
+              {items.map((it, i) => {
+                if (it.kind === "reasoning_token")
+                  return (
+                    <BubbleReasoning
+                      text={it.text}
+                      reasoningExpanded={keepReasoningExpanded}
+                    />
+                  );
+                if (it.kind === "user")
+                  return <BubbleUser key={i} text={it.text} label="Me" />;
+                if (it.kind === "assistant")
+                  return (
+                    <BubbleAssistant key={i} text={it.text} source={it.source} />
+                  );
+                if (it.kind === "streaming")
+                  return <BubbleAssistant key={i} text={it.text} source="LLM" />;
+                return (
+                  <BubbleTool
+                    key={i}
+                    result={it.call.result}
+                    args={it.call.args}
+                    name={it.call.name}
+                  />
+                );
+              })}
 
-          <ChatLoadingIndicator loading={loadingHistory || busy} />
+              <ChatLoadingIndicator loading={loadingHistory || busy} />
 
-          <div ref={bottomRef} className="mb-10 h-30" />
+              <div ref={bottomRef} />
+            </div>
+          )}
           <ChatBox
             sessionId={activeSessionId}
             inputRef={inputRef}

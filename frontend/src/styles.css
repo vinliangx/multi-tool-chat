@@ -24,29 +24,36 @@ main {
 .app-container {
   @apply bg-linear-120 from-slate-900 to-slate-600;
 }
+
 .chat-contents {
-  @apply h-dvh gap-4 overflow-auto overflow-y-auto border-l-4 border-b-slate-800 border-l-black bg-black p-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
+  @apply flex flex-col h-dvh border-l-4 border-b-slate-800 border-l-black bg-black;
 
   box-shadow: inset 0 0 200px var(--color-slate-800);
 }
 
+/* scrollable messages area — flex-1 so chat-box-wrapper stays pinned at bottom */
+.chat-messages {
+  @apply flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
+}
+
 .chat-box-wrapper {
-  @apply absolute bottom-4 left-0 z-10 w-screen items-center justify-center;
+  @apply z-10 w-full items-center justify-center pb-2 sm:pb-4;
+
   .chat-box {
-    @apply mx-auto rounded-2xl border-slate-500 bg-linear-to-r from-slate-900 to-slate-800 p-4 shadow-2xl ring-1 shadow-slate-900 ring-slate-700 md:w-[70vw];
+    @apply mx-2 sm:mx-4 md:mx-auto rounded-2xl border-slate-500 bg-linear-to-r from-slate-900 to-slate-800 p-3 sm:p-4 shadow-2xl ring-1 shadow-slate-900 ring-slate-700 w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] md:w-[88%] lg:w-[82%] xl:w-[75%];
   }
 
   &.new {
-    @apply bottom-[50%] w-screen;
+    @apply w-full;
   }
 }
 
 .chat-input {
-  @apply field-sizing-content h-fit max-h-50 min-h-25 w-full flex-1 resize-none overflow-auto rounded-md bg-gray-950 px-3 py-2.5 text-[90%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  @apply field-sizing-content h-fit max-h-40 sm:max-h-50 min-h-14 sm:min-h-18 md:min-h-25 w-full flex-1 resize-none overflow-auto rounded-md bg-gray-950 px-3 py-2 sm:py-2.5 text-[85%] sm:text-[90%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .chat-assistant {
-  @apply w-[90%] rounded-r-2xl rounded-bl-2xl bg-linear-120 from-gray-900 to-gray-700 px-4 text-[95%] text-gray-200 shadow-2xl shadow-slate-900;
+  @apply w-[95%] sm:w-[90%] rounded-r-2xl rounded-bl-2xl bg-linear-120 from-gray-900 to-gray-700 px-3 sm:px-4 text-[88%] sm:text-[95%] text-gray-200 shadow-2xl shadow-slate-900;
 }
 
 .chat-markdown-safe {
@@ -55,22 +62,26 @@ main {
 }
 
 .chat-user {
-  @apply max-w-[90%] min-w-[20%] self-end rounded rounded-l-2xl rounded-br-2xl bg-linear-120 from-blue-900 to-blue-700 px-4 text-[95%] whitespace-pre-wrap text-blue-100 shadow-2xl shadow-blue-900;
+  @apply max-w-[95%] sm:max-w-[90%] min-w-[20%] self-end rounded rounded-l-2xl rounded-br-2xl bg-linear-120 from-blue-900 to-blue-700 px-3 sm:px-4 text-[88%] sm:text-[95%] whitespace-pre-wrap text-blue-100 shadow-2xl shadow-blue-900;
 }
+
 .chat-sidebar {
   @apply mt-4 flex-1;
 }
+
 .chat-tool {
-  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-900 border-b-slate-800 bg-gray-950 p-[8px_12px] font-mono text-[12px];
+  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-900 border-b-slate-800 bg-gray-950 p-[6px_10px] sm:p-[8px_12px] font-mono text-[10px] sm:text-[12px];
 
   pre {
     @apply max-w-fit overflow-hidden rounded-xl border border-gray-700 bg-black p-2;
   }
 }
+
 .chat-reasoning {
-  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-900 border-b-slate-800 bg-gray-950 p-[8px_12px] font-mono text-[12px];
+  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-900 border-b-slate-800 bg-gray-950 p-[6px_10px] sm:p-[8px_12px] font-mono text-[10px] sm:text-[12px];
 }
 
+/* xs/sm: hidden — md: narrow — lg/xl: progressively wider */
 aside {
-  @apply z-11 w-90 overflow-auto text-white max-md:hidden lg:visible;
+  @apply z-11 overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;
 }
