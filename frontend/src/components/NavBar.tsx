@@ -17,13 +17,13 @@ export default function NavBar({
 }: NavBarArgs) {
   return (
     <nav className="chat-sidebar">
-      {sessions.length > 0 && <div className="mx-4">Recents:</div>}
+      {sessions.length > 0 && <div className="mx-4 mb-2">Recents:</div>}
 
       {sessions.map((it, i) => {
         return (
           <div
             key={i}
-            className="bg mx-2 mb-2 flex items-center rounded-2xl bg-slate-800 hover:bg-slate-700"
+            className="bg mx-2 mb-2 flex h-18 items-center rounded-xl bg-slate-800 ring ring-slate-700 hover:bg-slate-700"
           >
             <button
               onClick={() => reuseSession(it.session_id)}
