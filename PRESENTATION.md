@@ -27,7 +27,7 @@ Prompt: `"Who is the highest paid employee?"`
 
 ## 7. External API — Weather
 
-Prompt: `"What is the weather in Orlando, FL right now?"`
+Prompt: `"What is the weather in Queens, NY right now?"`
 
 ## 8. Save Memory
 
