@@ -299,7 +299,7 @@ export function App() {
 
       <main className="flex flex-1 flex-col gap-3">
         <div
-          className={`chat-contents md:rounded-tl-3xl md:rounded-bl-3xl${items.length === 0 ? "justify-center" : ""}`}
+          className={`chat-contents md:rounded-tl-3xl md:rounded-bl-3xl ${items.length === 0 ? "justify-center" : ""}`}
         >
           {items.length > 0 && (
             <div className="chat-messages">
