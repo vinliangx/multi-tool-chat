@@ -30,7 +30,7 @@ A secondary agent or workflow that processes oversized tool results when they ar
 - [x] Frontend: React application
 - [x] Backend: Python API
 - [x] Agent framework: LangGraph
-- [ ] Build system: Pants
+- [x] Build system: Pants
 - [ ] Infrastructure: AWS provisioned using Terraform
 - [x] API integration between frontend and backend
 - [ ] Timeline
