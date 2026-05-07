@@ -13,9 +13,9 @@ from app.config import settings
 
 def build_chat_llm() -> BaseChatModel:
     if settings.llm_provider == "anthropic":
-        return _build_antropic(model_name=settings.model_name, tokens=2)
+        return _build_antropic(model_name=settings.model_name, tokens=2048)
     elif settings.llm_provider == "ollama":
-        return _build_ollama(model_name=settings.ollama_model)
+        return _build_ollama(model_name=settings.ollama_model, reasoning=True)
 
 
 def build_summarizer_llm() -> BaseChatModel:
@@ -41,12 +41,12 @@ def _build_antropic(model_name: str, tokens: int = 1024) -> BaseChatModel:
     )
 
 
-def _build_ollama(model_name: str) -> BaseChatModel:
+def _build_ollama(model_name: str, reasoning: bool = False) -> BaseChatModel:
     from langchain_ollama import ChatOllama
 
     return ChatOllama(
         model=model_name,
         base_url=settings.ollama_base_url,
         temperature=0,
-        reasoning=True,
+        reasoning=reasoning,
     )
