@@ -108,7 +108,11 @@ export function ChatBox({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={inputChatKeyPress}
-              placeholder={busy ? "Thinking" : "Ask anything"}
+              placeholder={
+                busy
+                  ? "Thinking"
+                  : "Ask anything, use ↑ and ↓ arrow keys to move between sent messages if available."
+              }
               disabled={busy}
               className="chat-input"
             />

@@ -40,7 +40,8 @@ main {
   @apply z-10 w-full items-center justify-center pb-2 sm:pb-4;
 
   .chat-box {
-    @apply mx-2 w-[calc(100%-1rem)] rounded-2xl border-slate-500 bg-linear-to-r from-slate-900 to-slate-800 p-3 shadow-2xl ring-1 shadow-slate-900 ring-slate-700 sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
+    @apply mx-2 w-[calc(100%-1rem)] rounded-2xl bg-linear-to-r from-slate-900 to-slate-900 p-3 shadow-2xl shadow-slate-900 sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
+    @apply ring-1 ring-slate-800;
   }
 
   &.new {
@@ -50,7 +51,7 @@ main {
 
 .chat-input {
   @apply h-fit max-h-14 min-h-2 w-full sm:max-h-50 sm:min-h-18 md:min-h-15;
-  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-950 px-3 py-2 text-[85%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
 }
 
 .chat-assistant {
