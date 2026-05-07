@@ -23,7 +23,7 @@ export default function NavBar({
         return (
           <div
             key={i}
-            className="bg mx-2 mb-2 flex h-18 items-center rounded-xl bg-slate-800 ring ring-slate-700 hover:bg-slate-700"
+            className="bg mx-2 mb-2 flex h-15 items-center rounded-xl bg-slate-900 ring ring-slate-800 hover:bg-slate-700"
           >
             <button
               onClick={() => reuseSession(it.session_id)}
@@ -33,8 +33,8 @@ export default function NavBar({
                 <div
                   className={
                     activeSessionId == it.session_id
-                      ? "flex text-[90%] text-amber-400"
-                      : "flex text-[90%]"
+                      ? "flex text-[80%] text-amber-400"
+                      : "flex text-[80%]"
                   }
                 >
                   {it.title.length > 80
