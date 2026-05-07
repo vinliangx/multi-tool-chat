@@ -121,13 +121,13 @@ Choosing Redis as the single store simplifies local development (one `docker com
 
 A `redisvl.SemanticCache` wraps query/response pairs with vector embeddings. On each chat turn, the cache is checked before the agent is invoked. A cache hit short-circuits the entire graph and returns the stored response immediately, tagged with `source: "CACHE"` in the frontend.
 
-The cache key includes the session ID to avoid cross-session pollution:
+The cache uses the plain prompt as the key (no session-ID prefix), so hits are shared across sessions:
 
 ```python
-cache.check(prompt=f"{session_id}:{user_prompt}")
+cache.check(prompt=prompt, distance_threshold=0.09)
 ```
 
-The distance threshold is set very conservatively (0.001) to avoid false positives.
+The distance threshold is 0.09, permissive enough to match semantically equivalent rephrasings. Cache entries expire after 5 minutes (TTL = 300 s).
 
 ### 2.6 Session-Scoped Context Variable for Tools
 
@@ -169,7 +169,7 @@ The frontend assembles these events into the chat item list in `App.tsx`.
 
 The semantic cache requires a vector embedding API. LangChain's Anthropic integration does not expose an embedding model, so `build_vectorizer_llm()` returns `None` when `LLM_PROVIDER=anthropic`, and the cache nodes are omitted from the graph entirely. Yet `claude-sonnet-4-6` is the recommended and default provider.
 
-In practice, the semantic cache only works when using Ollama with `nomic-embed-text` or a similar embedding model.
+In practice, the semantic cache only works when using Ollama with an embedding model such as `embeddinggemma` (the current default) or `nomic-embed-text`.
 
 **Alternative not taken:** Use a third-party embedding provider (e.g. Amazon Titan, Cohere) regardless of the chat LLM. This was not implemented to keep the number of external dependencies low.
 

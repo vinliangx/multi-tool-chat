@@ -53,7 +53,7 @@ Key design choices:
 - **Session Manager owns the truncation policy.** Every tool routes its output through `record_tool_result`. Small results are returned inline; oversized results are summarized and persisted, with only `{handle, summary, size, ...}` returned to the agent.
 - **`recall(handle)` is an explicit tool.** The agent decides when to bring full content back. This satisfies the requirement: "use metadata from stored results to decide whether a result should be brought back into the context window."
 - **Summarizer is map-reduce.** Truly large payloads are chunked, summarized per chunk, then reduced.
-- **Semantic cache.** Redis-backed `SemanticCache` with vector embeddings de-duplicates repeated queries within a session, returning cached responses without hitting the LLM. Requires Ollama (`LLM_PROVIDER=ollama`) — silently disabled when using Anthropic because Anthropic has no first-party embedding API in LangChain.
+- **Semantic cache.** Redis-backed `SemanticCache` with vector embeddings de-duplicates repeated queries across sessions (shared cache, distance threshold 0.09, 5-minute TTL), returning cached responses without hitting the LLM. Requires Ollama (`LLM_PROVIDER=ollama`) — silently disabled when using Anthropic because Anthropic has no first-party embedding API in LangChain.
 - **Redis is the single backing store.** Session metadata, tool-result payloads, LangGraph checkpoints, the semantic cache, and the long-term memory store all live in Redis — no DynamoDB required.
 - **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis.
 
@@ -173,7 +173,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `OLLAMA_BASE_URL` | Ollama server URL (default: `http://localhost:11434`) |
 | `OLLAMA_MODEL` | Ollama chat model (default: `qwen2.5:7b`) |
 | `OLLAMA_SUMMARIZER_MODEL` | Ollama summarizer model |
-| `OLLAMA_EMBEDDING_MODEL` | Ollama embedding model for semantic cache |
+| `OLLAMA_EMBEDDING_MODEL` | Ollama embedding model for semantic cache (default: `embeddinggemma`) |
 | `REDIS_URL` | Redis connection string (default: `redis://localhost:6379`) |
 | `EXTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the browser (presigned URLs) |
 | `INTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the backend container |
@@ -198,8 +198,8 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 ## Frontend features
 
 - **Multi-session sidebar** — create, switch, and delete chat sessions; history reloads from Redis on selection.
-- **Tool call bubbles** — each tool invocation is displayed with its name, arguments, and result inline.
-- **Reasoning bubbles** — extended thinking tokens are surfaced in a collapsible bubble when the model emits reasoning content.
+- **Tool call bubbles** — each tool invocation shows its name; click the bubble to expand arguments and result.
+- **Reasoning bubbles** — extended thinking tokens are surfaced in a collapsible bubble; a global checkbox in the chat bar keeps all reasoning bubbles expanded or collapsed.
 - **Cache badge** — assistant messages show whether the response came from the LLM or the semantic cache (Ollama only).
 - **File upload** — attach CSV files via presigned S3 URL; the agent can then read them with `csv_s3`.
 - **Message history** — up/down arrow cycles through sent messages.
