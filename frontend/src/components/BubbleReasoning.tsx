@@ -1,3 +1,5 @@
+import { faBrain } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useState } from "react";
 import MarkdownPreview from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,10 +18,11 @@ export default function BubbleReasoning({
         {text !== undefined && (
           <div className="mt-1">
             <div
-              className="cursor-pointer text-[80%] text-gray-200 italic"
+              className="cursor-pointer flex-row justify-center self-center text-gray-200"
               onClick={() => setShowDetails(!showDetails)}
             >
-              Reasoning...
+              <FontAwesomeIcon icon={faBrain} className="mx-2" />
+              Reasoning
             </div>
             {showDetails && (
               <div className="m-2">

@@ -48,7 +48,7 @@ services:
       EXTERNAL_S3_ENDPOINT_URL: http://localhost:9444
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 5s
+      interval: 15s
       timeout: 10s
       start_period: 5s
 

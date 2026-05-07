@@ -111,7 +111,7 @@ export function ChatBox({
               placeholder={
                 busy
                   ? "Thinking"
-                  : "Ask anything, use ↑ and ↓ arrow keys to move between sent messages if available."
+                  : "Ask anything, use ↑ and ↓ arrow keys to move between previous messages."
               }
               disabled={busy}
               className="chat-input"
