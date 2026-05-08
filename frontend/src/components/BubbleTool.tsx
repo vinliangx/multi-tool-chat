@@ -19,16 +19,20 @@ export default function BubbleTool({ name, result, args }: BubbleToolArgs) {
           Using tool [
           <span className="font-semibold text-blue-400">{name}</span>]
         </div>
-        {showResults && result !== undefined && (
+        {showResults && (
           <div className="mt-1">
             <p className="py-2 text-white">Args:</p>
             <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
               {JSON.stringify(args)}
             </pre>
-            <p className="py-2 text-white">Response:</p>
-            <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
-              {data}
-            </pre>
+            {result !== undefined && (
+              <p className="py-2 text-white">Response:</p>
+            )}
+            {result !== undefined && (
+              <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
+                {data}
+              </pre>
+            )}
           </div>
         )}
       </div>
