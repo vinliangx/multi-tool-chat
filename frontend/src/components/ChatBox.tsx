@@ -43,13 +43,13 @@ export function ChatBox({
     if (e.key === "Enter" && !e.shiftKey) {
       send();
     }
-    if (e.key === "ArrowUp") {
+    if (e.key === "ArrowUp" && !e.shiftKey) {
       if (messageIndex.current > 0) {
         setInput(messages[--messageIndex.current]);
         e.preventDefault();
       }
     }
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" && !e.shiftKey) {
       if (messageIndex.current < messages.length - 1) {
         setInput(messages[++messageIndex.current]);
         e.preventDefault();

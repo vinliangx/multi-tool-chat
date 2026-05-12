@@ -165,7 +165,11 @@ export function App() {
             let targetIdx = -1;
             for (let i = xs.length - 1; i >= 0; i--) {
               const it = xs[i];
-              if (it.kind === "tool" && it.call.name === data.tool_name && !it.call.result) {
+              if (
+                it.kind === "tool" &&
+                it.call.name === data.tool_name &&
+                !it.call.result
+              ) {
                 targetIdx = i;
                 break;
               }
@@ -173,7 +177,16 @@ export function App() {
             if (targetIdx === -1) return xs;
             return xs.map((it, i) =>
               i === targetIdx && it.kind === "tool"
-                ? { ...it, call: { ...it.call, summarizeProgress: { current: data.current, total: data.total } } }
+                ? {
+                    ...it,
+                    call: {
+                      ...it.call,
+                      summarizeProgress: {
+                        current: data.current,
+                        total: data.total,
+                      },
+                    },
+                  }
                 : it,
             );
           });
@@ -182,7 +195,14 @@ export function App() {
           setItems((xs) =>
             xs.map((it) =>
               it.kind === "tool" && it.call.id === data.tool_call_id
-                ? { kind: "tool", call: { ...it.call, result: handle, summarizeProgress: undefined } }
+                ? {
+                    kind: "tool",
+                    call: {
+                      ...it.call,
+                      result: handle,
+                      summarizeProgress: undefined,
+                    },
+                  }
                 : it,
             ),
           );
@@ -373,7 +393,13 @@ export function App() {
                     result={it.call.result}
                     args={it.call.args}
                     name={it.call.name}
-                    summarizeProgress={it.call.summarizeProgress}
+                    summarizeProgress={busy ? it.call.summarizeProgress : null}
+                    onCancel={() =>
+                      withConfirm("Cancel tool?", () => {
+                        abortRef.current?.abort();
+                        setBusy(false);
+                      })
+                    }
                   />
                 );
               })}

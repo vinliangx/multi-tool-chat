@@ -6,7 +6,8 @@ export type BubbleToolArgs = {
   name: string;
   args: any;
   result?: string;
-  summarizeProgress?: { current: number; total: number };
+  summarizeProgress?: { current: number; total: number } | null;
+  onCancel?: () => void;
 };
 
 export default function BubbleTool({
@@ -14,6 +15,7 @@ export default function BubbleTool({
   result,
   args,
   summarizeProgress,
+  onCancel,
 }: BubbleToolArgs) {
   const data = result ? JSON.parse(result) : undefined;
   const [showResults, setShowResults] = useState(false);
@@ -33,6 +35,12 @@ export default function BubbleTool({
               Chunks {summarizeProgress?.current ?? 0}/
               {summarizeProgress?.total ?? 0}
               <FontAwesomeIcon icon={faSpinner} spin className="ml-2" />
+              <button
+                className="ml-4 cursor-pointer text-blue-300"
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
             </div>
           )}
         </div>
