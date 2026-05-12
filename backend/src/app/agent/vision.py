@@ -10,7 +10,6 @@ def _llm():
 async def vision(prompt: str, mime: str, data: str) -> str:
     """Vision read image"""
     llm = _llm()
-    print(prompt, mime, data)
     message = HumanMessage(
         content=[
             {"type": "text", "text": prompt},

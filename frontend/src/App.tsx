@@ -246,6 +246,7 @@ export function App() {
     setItems([]);
     setMessages([]);
     setLoadingHistory(true);
+    setContextUsage(null);
     try {
       const resp = await fetch(`/sessions/${session_id}/messages`);
       const data: Item[] = await resp.json();
@@ -268,6 +269,7 @@ export function App() {
         setItems([]);
         setMessages([]);
         inputRef.current?.focus();
+        setContextUsage(null);
       },
     );
   };

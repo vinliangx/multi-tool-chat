@@ -86,27 +86,27 @@ main {
 }
 
 .context-usage-badge {
-  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg px-3 pt-4;
+  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg bg-gray-700 p-4 px-3 shadow-xl shadow-slate-900;
 }
 
 .context-usage-bar-track {
-  @apply h-1 w-full overflow-hidden rounded-full bg-slate-800;
+  @apply h-2 w-full overflow-hidden rounded-full bg-slate-500;
 }
 
 .context-usage-bar-fill {
-  @apply h-full rounded-full bg-amber-500 transition-all duration-500;
+  @apply h-full rounded-full bg-blue-500 transition-all duration-500;
 }
 
 .context-usage-stats {
-  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[70%] text-slate-400;
+  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[70%] text-slate-200;
 
   strong {
-    @apply text-slate-300;
+    @apply text-slate-400;
   }
 }
 
 .context-usage-window {
-  @apply ml-auto text-slate-600;
+  @apply ml-auto text-slate-400;
 }
 
 /* xs/sm: hidden — md: narrow — lg/xl: progressively wider */

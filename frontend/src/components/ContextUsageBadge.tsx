@@ -16,11 +16,13 @@ export default function ContextUsageBadge({
   contextWindowLimit,
 }: Props) {
   const pct = Math.min((inputTokens / contextWindowLimit) * 100, 100);
-
   return (
-    <div className="context-usage-badge">
+    <div className="context-usage-badge shadow-2xl shadow-amber-100">
       <div className="context-usage-bar-track">
-        <div className="context-usage-bar-fill" style={{ width: `${pct}%` }} />
+        <div
+          className="context-usage-bar-fill real"
+          style={{ width: `${pct}%` }}
+        />
       </div>
       <div className="context-usage-stats">
         <span
@@ -41,6 +43,9 @@ export default function ContextUsageBadge({
         >
           <strong>Out:</strong> {fmt(outputTokens)}
         </span>
+        {inputTokens > contextWindowLimit && (
+          <div className="font-mono font-bold">| Message history trimmed</div>
+        )}
         <span className="context-usage-window">
           Context Window / {fmt(contextWindowLimit)}
         </span>
