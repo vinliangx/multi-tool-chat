@@ -17,7 +17,7 @@ export default function ContextUsageBadge({
 }: Props) {
   const pct = Math.min((inputTokens / contextWindowLimit) * 100, 100);
   return (
-    <div className="context-usage-badge shadow-2xl shadow-amber-100">
+    <div className="context-usage-badge">
       <div className="context-usage-bar-track">
         <div
           className="context-usage-bar-fill real"

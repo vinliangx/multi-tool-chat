@@ -111,6 +111,6 @@ main {
 
 /* xs/sm: hidden — md: narrow — lg/xl: progressively wider */
 aside {
-  @apply overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;
+  @apply z-10 overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;
   @apply [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
 }

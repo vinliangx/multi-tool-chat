@@ -11,6 +11,7 @@ from typing import Any
 
 import tiktoken
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.agent.llm import build_summarizer_llm
 
@@ -30,14 +31,15 @@ def _llm():
 
 
 def _chunk(text: str, target_tokens: int = 4000) -> list[str]:
-    lines = text.splitlines(keepends=True)
-    encode_lines = [_enc.encode(line) for line in lines]
-    if len(encode_lines) <= target_tokens:
-        return [text]
-    return [
-        _enc.decode(encode_lines[i : i + target_tokens])
-        for i in range(0, len(encode_lines), target_tokens)
-    ]
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=target_tokens,
+        chunk_overlap=target_tokens * 0.1,
+        add_start_index=True,
+        separators=["\n\n", "\n", " ", ""],
+    )
+
+    chunks = splitter.split_text(text)
+    return chunks
 
 
 async def summarize(
@@ -81,5 +83,4 @@ async def summarize(
     resp = await llm.ainvoke(
         [SystemMessage(content=_SYSTEM), HumanMessage(content=reduce_prompt)]
     )
-    print(reduce_prompt, str(resp.content))
     return str(resp.content)
