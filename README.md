@@ -19,6 +19,7 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  Tool Node   │──┘        │ │
                      │  │  http_fetch  │           │ │
                      │  │  csv_s3      │           │ │
+                     │  │  image_read  │           │ │
                      │  │  sql_query   │           │ │
                      │  │  sql_ddl     │           │ │
                      │  │  sql_dml     │           │ │
@@ -52,10 +53,12 @@ Key design choices:
 
 - **Session Manager owns the truncation policy.** Every tool routes its output through `record_tool_result`. Small results are returned inline; oversized results are summarized and persisted, with only `{handle, summary, size, ...}` returned to the agent.
 - **`recall(handle)` is an explicit tool.** The agent decides when to bring full content back. This satisfies the requirement: "use metadata from stored results to decide whether a result should be brought back into the context window."
-- **Summarizer is map-reduce.** Truly large payloads are chunked, summarized per chunk, then reduced.
+- **Summarizer is map-reduce.** Truly large payloads are chunked via `RecursiveCharacterTextSplitter`, summarized per chunk, then reduced. Progress events are streamed to the UI during summarization.
 - **Semantic cache.** Redis-backed `SemanticCache` with vector embeddings de-duplicates repeated queries across sessions (shared cache, distance threshold 0.09, 5-minute TTL), returning cached responses without hitting the LLM. Requires Ollama (`LLM_PROVIDER=ollama`) — silently disabled when using Anthropic because Anthropic has no first-party embedding API in LangChain.
 - **Redis is the single backing store.** Session metadata, tool-result payloads, LangGraph checkpoints, the semantic cache, and the long-term memory store all live in Redis — no DynamoDB required.
 - **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis.
+- **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
+- **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 
 ## Layout
 
@@ -65,8 +68,8 @@ backend/        Python (FastAPI + LangGraph), Pants targets
     api/        HTTP routes (SSE chat stream, session CRUD, upload_url)
     agent/      LangGraph graph, summarizer, semantic cache, vectorizer
     session/    Session Manager (RedisSessionStore + models)
-    tools/      http_fetch, csv_s3, sql_query, sql_ddl, sql_dml,
-                weather, recall, save_memory, read_memory
+    tools/      http_fetch, csv_s3, image_read, sql_query, sql_ddl,
+                sql_dml, weather, recall, save_memory, read_memory
     upload/     Presigned S3 URL generation
   tests/
   Dockerfile
@@ -74,7 +77,7 @@ frontend/       React + Vite + TS chat UI
   src/
     components/ NavBar, Header, ChatBox, FileUpload, FileItem,
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
-                ChatLoadingIndicator, ConfirmDialog
+                ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -174,6 +177,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `OLLAMA_MODEL` | Ollama chat model (default: `qwen2.5:7b`) |
 | `OLLAMA_SUMMARIZER_MODEL` | Ollama summarizer model |
 | `OLLAMA_EMBEDDING_MODEL` | Ollama embedding model for semantic cache (default: `embeddinggemma`) |
+| `OLLAMA_VISION_MODEL` | Ollama vision model (default: `qwen3-vl:latest`) |
 | `REDIS_URL` | Redis connection string (default: `redis://localhost:6379`) |
 | `EXTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the browser (presigned URLs) |
 | `INTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the backend container |
@@ -186,7 +190,8 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | Tool | Description |
 | --- | --- |
 | `http_fetch` | Fetch a URL and return the response body |
-| `csv_s3` | Read a CSV file from S3 |
+| `csv_s3` | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans |
+| `image_read` | Read an image from S3 and analyze it with the vision LLM; OCR supported |
 | `sql_query` | Run a SELECT query against the local SQLite DB |
 | `sql_ddl` | Run CREATE / DROP / ALTER TABLE statements |
 | `sql_dml` | Run INSERT / UPDATE / DELETE statements |
@@ -201,8 +206,10 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 - **Tool call bubbles** — each tool invocation shows its name; click the bubble to expand arguments and result.
 - **Reasoning bubbles** — extended thinking tokens are surfaced in a collapsible bubble; a global checkbox in the chat bar keeps all reasoning bubbles expanded or collapsed.
 - **Cache badge** — assistant messages show whether the response came from the LLM or the semantic cache (Ollama only).
-- **File upload** — attach CSV files via presigned S3 URL; the agent can then read them with `csv_s3`.
-- **Message history** — up/down arrow cycles through sent messages.
+- **Context usage badge** — shows estimated token usage vs. the context window limit, updated after each turn.
+- **File upload** — attach CSV or image files via presigned S3 URL; the agent reads CSVs with `csv_s3` and images with `image_read`.
+- **Summarization progress** — tool bubbles display a live chunk counter (`chunk N / total`) while the summarizer is running, with a cancel button to abort the in-flight request.
+- **Message history** — up/down arrow (without Shift) cycles through sent messages.
 
 ## Known Issues
 
