@@ -46,3 +46,9 @@ Prompt: `"That summary isn't enough — recall the full payload"`
 ## 11. Semantic Cache (Ollama only)
 
 Ask the same question twice — second response is instant, badge shows CACHE.
+
+# Round of Issues
+
+## 1. Issue #1
+
+Prompt: Find all Hiking Backpack transactions
