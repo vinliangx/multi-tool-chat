@@ -86,7 +86,7 @@ main {
 }
 
 .context-usage-badge {
-  @apply mx-auto w-[95%] sm:w-[90%] mt-1 mb-2 flex flex-col gap-1 rounded-lg border border-slate-800 bg-gray-900/60 px-3 py-2;
+  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg px-3 pt-4;
 }
 
 .context-usage-bar-track {
@@ -94,11 +94,11 @@ main {
 }
 
 .context-usage-bar-fill {
-  @apply h-full rounded-full bg-indigo-500 transition-all duration-500;
+  @apply h-full rounded-full bg-amber-500 transition-all duration-500;
 }
 
 .context-usage-stats {
-  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-slate-400;
+  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[70%] text-slate-400;
 
   strong {
     @apply text-slate-300;

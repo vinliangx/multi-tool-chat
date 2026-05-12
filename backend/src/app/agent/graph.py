@@ -231,7 +231,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver):
             "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
         )
 
-    return g.compile(checkpointer=checkpointer, debug=True)
+    return g.compile(checkpointer=checkpointer)
 
 
 _graph = None
