@@ -96,7 +96,7 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
                 type="file"
                 onChange={handleFileChange}
                 multiple
-                accept=".csv"
+                accept=".csv,image/*"
                 style={{ display: "none" }}
               />
             </li>

@@ -1,0 +1,27 @@
+from langchain_core.messages import HumanMessage
+
+from app.agent.llm import build_vision_llm
+
+
+def _llm():
+    return build_vision_llm()
+
+
+async def vision(prompt: str, mime: str, data: str) -> str:
+    """Vision read image"""
+    llm = _llm()
+    print(prompt, mime, data)
+    resp = llm.invoke(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        type: "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{data}"},
+                    },
+                    {type: "text", "text": prompt},
+                ]
+            )
+        ],
+    )
+    return str(resp.content)

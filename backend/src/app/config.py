@@ -12,11 +12,13 @@ class Settings(BaseSettings):
     model_name: str = "claude-sonnet-4-6"
     summarizer_model: str = "claude-haiku-4-5-20251001"
     embedding_model: str = "embeddinggemma:latest"
+    vision_model: str = "qwen3-vl:latest"
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     ollama_summarizer_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "embeddinggemma"
+    ollama_vision_model: str = "qwen3-vl:latest"
 
     aws_region: str = "us-east-1"
     sessions_table: str = "chat-sessions"

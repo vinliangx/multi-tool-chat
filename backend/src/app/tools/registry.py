@@ -7,6 +7,7 @@ from langchain_core.tools import BaseTool
 from app.tools import (
     csv_s3,
     http_fetch,
+    image_s3,
     read_memory,
     recall,
     save_memory,
@@ -26,6 +27,7 @@ ALL_TOOL_FACTORIES = [
     sql_dml.factory,
     save_memory.factory,
     read_memory.factory,
+    image_s3.factory,
 ]
 
 

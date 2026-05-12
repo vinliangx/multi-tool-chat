@@ -24,6 +24,12 @@ def build_summarizer_llm() -> BaseChatModel:
     elif settings.llm_provider == "ollama":
         return _build_ollama(model_name=settings.ollama_summarizer_model)
 
+def build_vision_llm() -> BaseChatModel:
+    if settings.llm_provider == "anthropic":
+        return _build_antropic(model_name=settings.vision_model)
+    elif settings.llm_provider == "ollama":
+        return _build_ollama(model_name=settings.ollama_vision_model)
+
 
 def _build_antropic(model_name: str, tokens: int = 1024) -> BaseChatModel:
     if not settings.anthropic_api_key:
