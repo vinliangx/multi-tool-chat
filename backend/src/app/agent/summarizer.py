@@ -7,15 +7,21 @@ chunk -> summarize each chunk -> summarize the summaries.
 
 from __future__ import annotations
 
+import asyncio
+from contextvars import ContextVar
 from typing import Any
 
-import tiktoken
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.agent.llm import build_summarizer_llm
 
-_enc = tiktoken.get_encoding("cl100k_base")
+# Set to an asyncio.Queue by run_agent_stream so progress events can be
+# interleaved into the SSE stream while the graph is blocked in ToolNode.
+_progress_queue: ContextVar[asyncio.Queue | None] = ContextVar(
+    "summarizer_progress", default=None
+)
+
 
 _SYSTEM = (
     "You compress tool output for an AI agent's context window. "
@@ -51,6 +57,7 @@ async def summarize(
 ) -> str:
     chunks = _chunk(payload, target_tokens=target_tokens)
     llm = _llm()
+    queue = _progress_queue.get()
 
     if len(chunks) == 1:
         prompt = (
@@ -73,6 +80,20 @@ async def summarize(
             [SystemMessage(content=_SYSTEM), HumanMessage(content=prompt)]
         )
         partials.append(str(resp.content))
+        if queue is not None:
+            await queue.put(
+                (
+                    "progress",
+                    {
+                        "type": "summarize_progress",
+                        "data": {
+                            "tool_name": tool_name,
+                            "current": idx + 1,
+                            "total": len(chunks),
+                        },
+                    },
+                )
+            )
 
     reduce_prompt = (
         f"Tool: {tool_name}\nArgs: {tool_args}\n\n"

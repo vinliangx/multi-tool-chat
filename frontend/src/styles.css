@@ -51,7 +51,9 @@ main {
 
 .chat-input {
   @apply h-fit max-h-14 min-h-2 w-full sm:max-h-50 sm:min-h-18 md:min-h-15;
-  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300;
+  @apply shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+  @apply border-amber-500 transition-all duration-200 focus:border;
 }
 
 .chat-assistant {

@@ -16,6 +16,7 @@ type ToolCall = {
   name: string;
   args: Record<string, unknown>;
   result?: string;
+  summarizeProgress?: { current: number; total: number };
 };
 
 type Item =
@@ -158,12 +159,30 @@ export function App() {
             args: data.args,
           };
           setItems((xs) => [...xs, { kind: "tool", call }]);
+        } else if (evt === "summarize_progress") {
+          setItems((xs) => {
+            // Find the last pending tool call with this name (no result yet)
+            let targetIdx = -1;
+            for (let i = xs.length - 1; i >= 0; i--) {
+              const it = xs[i];
+              if (it.kind === "tool" && it.call.name === data.tool_name && !it.call.result) {
+                targetIdx = i;
+                break;
+              }
+            }
+            if (targetIdx === -1) return xs;
+            return xs.map((it, i) =>
+              i === targetIdx && it.kind === "tool"
+                ? { ...it, call: { ...it.call, summarizeProgress: { current: data.current, total: data.total } } }
+                : it,
+            );
+          });
         } else if (evt === "tool_result") {
           const handle = JSON.stringify(data.content);
           setItems((xs) =>
             xs.map((it) =>
               it.kind === "tool" && it.call.id === data.tool_call_id
-                ? { kind: "tool", call: { ...it.call, result: handle } }
+                ? { kind: "tool", call: { ...it.call, result: handle, summarizeProgress: undefined } }
                 : it,
             ),
           );
@@ -354,6 +373,7 @@ export function App() {
                     result={it.call.result}
                     args={it.call.args}
                     name={it.call.name}
+                    summarizeProgress={it.call.summarizeProgress}
                   />
                 );
               })}
