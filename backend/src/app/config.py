@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_name: str = "claude-sonnet-4-6"
     summarizer_model: str = "claude-haiku-4-5-20251001"
     embedding_model: str = "embeddinggemma:latest"
-    vision_model: str = "qwen3-vl:latest"
+    vision_model: str = "claude-sonnet-4-6"
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
