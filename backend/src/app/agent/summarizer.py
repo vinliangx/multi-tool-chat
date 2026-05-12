@@ -19,6 +19,7 @@ _enc = tiktoken.get_encoding("cl100k_base")
 _SYSTEM = (
     "You compress tool output for an AI agent's context window. "
     "Preserve concrete facts, numbers, identifiers, and any errors. "
+    "You have to hold necessary information to answer counting questions."
     "Drop boilerplate. Be terse. The agent can request the full payload "
     "later via a recall handle if it needs raw detail."
 )
@@ -29,12 +30,13 @@ def _llm():
 
 
 def _chunk(text: str, target_tokens: int = 4000) -> list[str]:
-    tokens = _enc.encode(text)
-    if len(tokens) <= target_tokens:
+    lines = text.splitlines(keepends=True)
+    encode_lines = [_enc.encode(line) for line in lines]
+    if len(encode_lines) <= target_tokens:
         return [text]
     return [
-        _enc.decode(tokens[i : i + target_tokens])
-        for i in range(0, len(tokens), target_tokens)
+        _enc.decode(encode_lines[i : i + target_tokens])
+        for i in range(0, len(encode_lines), target_tokens)
     ]
 
 
@@ -45,7 +47,7 @@ async def summarize(
     tool_args: dict[str, Any],
     target_tokens: int = 400,
 ) -> str:
-    chunks = _chunk(payload)
+    chunks = _chunk(payload, target_tokens=target_tokens)
     llm = _llm()
 
     if len(chunks) == 1:
@@ -79,4 +81,5 @@ async def summarize(
     resp = await llm.ainvoke(
         [SystemMessage(content=_SYSTEM), HumanMessage(content=reduce_prompt)]
     )
+    print(reduce_prompt, str(resp.content))
     return str(resp.content)
