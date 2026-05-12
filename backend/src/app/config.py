@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     tool_result_inline_token_limit: int = 4000
     tool_result_summarize_token_limit: int = 8000
-    context_window_token_limit: int = 150_000
+    context_window_token_limit: int = 12000
 
     cors_origins: list[str] = ["http://localhost:5173"]
     redis_url: str = "redis://localhost:6379"

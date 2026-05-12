@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 
 import boto3
 from botocore.client import Config

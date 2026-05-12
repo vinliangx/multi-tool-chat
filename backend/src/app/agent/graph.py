@@ -127,15 +127,18 @@ def _inject_file_urls(messages: list[AnyMessage]) -> list[AnyMessage]:
 
 
 async def _agent_node(state: AgentState) -> dict:
-    msgs = trim_messages(
-        [_SYSTEM, *_inject_file_urls(state["messages"])],
-        max_tokens=settings.context_window_token_limit,
-        strategy="last",
-        token_counter=_estimate_tokens,
-        include_system=True,
-        allow_partial=False,
-        start_on="human",
-    )
+    # msgs = trim_messages(
+    #     [_SYSTEM, *_inject_file_urls(state["messages"])],
+    #     max_tokens=settings.context_window_token_limit,
+    #     strategy="last",
+    #     token_counter=_estimate_tokens,
+    #     include_system=True,
+    #     allow_partial=False,
+    #     start_on="human",
+    # )
+
+    msgs = [_SYSTEM, *_inject_file_urls(state["messages"])]
+
     estimated = _estimate_tokens(msgs)
     resp = await _LLM.ainvoke(msgs)
     usage = resp.usage_metadata or {}
