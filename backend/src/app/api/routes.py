@@ -11,6 +11,7 @@ from app.agent.graph import (
     get_session_messages,
     run_agent_stream,
 )
+from app.config import settings
 from app.session.models import SessionRecord
 from app.session.store import get_store
 from app.upload.storage_service import UploadRequest, get_upload_url
@@ -27,6 +28,11 @@ class ChatRequest(BaseModel):
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/config")
+async def get_config() -> dict:
+    return {"context_window_token_limit": settings.context_window_token_limit}
 
 
 @router.get("/sessions")

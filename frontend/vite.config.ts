@@ -13,6 +13,7 @@ export default defineConfig({
       "/sessions": "http://backend:8000",
       "/health": "http://backend:8000",
       "/upload_url": "http://backend:8000",
+      "/config": "http://backend:8000",
     },
   },
 });

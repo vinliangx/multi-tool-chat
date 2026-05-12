@@ -6,6 +6,7 @@ import BubbleUser from "./components/BubbleUser";
 import { ChatBox } from "./components/ChatBox";
 import ChatLoadingIndicator from "./components/ChatLoadingIndicator";
 import ConfirmDialog from "./components/ConfirmDialog";
+import ContextUsageBadge from "./components/ContextUsageBadge";
 import { FileUploadItem } from "./components/FileUpload";
 import Header from "./components/Header";
 import NavBar from "./components/NavBar";
@@ -43,6 +44,12 @@ export function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [keepReasoningExpanded, setKeepReasoningExpanded] = useState(false);
+  const [contextUsage, setContextUsage] = useState<{
+    input_tokens: number;
+    output_tokens: number;
+    estimated_tokens: number;
+  } | null>(null);
+  const [contextWindowLimit, setContextWindowLimit] = useState(200_000);
   const [confirm, setConfirm] = useState<{
     message: string;
     onConfirm: () => void;
@@ -71,6 +78,12 @@ export function App() {
 
   useEffect(loadSessions, [activeSessionId]);
 
+  useEffect(() => {
+    fetch(`/config`)
+      .then((r) => r.json())
+      .then((data) => setContextWindowLimit(data.context_window_token_limit));
+  }, []);
+
   const send = useCallback(async () => {
     const textMessages: string[] = [input.trim()];
     if (!textMessages || busy) return;
@@ -90,6 +103,7 @@ export function App() {
     ]);
     setInput("");
     setFiles([]);
+    setContextUsage(null);
     setBusy(true);
 
     try {
@@ -168,6 +182,12 @@ export function App() {
               },
             ];
           });
+        } else if (evt === "usage") {
+          setContextUsage({
+            input_tokens: data.input_tokens,
+            output_tokens: data.output_tokens,
+            estimated_tokens: data.estimated_tokens,
+          });
         } else if (evt === "done") {
           setBusy(false);
         }
@@ -190,7 +210,7 @@ export function App() {
           }
           if (dataStr && evt) {
             handleEvent(evt, JSON.parse(dataStr));
-            break;
+            dataStr = "";
           }
         }
       }
@@ -307,6 +327,7 @@ export function App() {
                 if (it.kind === "reasoning_token")
                   return (
                     <BubbleReasoning
+                      key={i}
                       text={it.text}
                       reasoningExpanded={keepReasoningExpanded}
                     />
@@ -335,8 +356,16 @@ export function App() {
                 );
               })}
 
-              <ChatLoadingIndicator loading={loadingHistory || busy} />
+              {contextUsage && !busy && (
+                <ContextUsageBadge
+                  inputTokens={contextUsage.input_tokens}
+                  outputTokens={contextUsage.output_tokens}
+                  estimatedTokens={contextUsage.estimated_tokens}
+                  contextWindowLimit={contextWindowLimit}
+                />
+              )}
 
+              <ChatLoadingIndicator loading={loadingHistory || busy} />
               <div ref={bottomRef} />
             </div>
           )}

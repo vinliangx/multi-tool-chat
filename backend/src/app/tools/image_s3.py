@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import base64
-import csv
-import io
-import os
 
 import boto3
 from botocore.client import Config
@@ -50,7 +47,7 @@ async def _run(prompt: str, source: str) -> str:
 def factory(session_id_provider):
     return make_session_tool(
         name="image_read",
-        description="Read a Image file from S3 (s3://bucket/key)",
+        description="Read a Image file from S3 (s3://bucket/key), OCR Supported.",
         args_schema=ImageReadArgs,
         runner=_run,
         session_id_provider=session_id_provider,

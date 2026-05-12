@@ -85,6 +85,30 @@ main {
   @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-800 border-b-slate-800 bg-gray-900 p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
 }
 
+.context-usage-badge {
+  @apply mx-auto w-[95%] sm:w-[90%] mt-1 mb-2 flex flex-col gap-1 rounded-lg border border-slate-800 bg-gray-900/60 px-3 py-2;
+}
+
+.context-usage-bar-track {
+  @apply h-1 w-full overflow-hidden rounded-full bg-slate-800;
+}
+
+.context-usage-bar-fill {
+  @apply h-full rounded-full bg-indigo-500 transition-all duration-500;
+}
+
+.context-usage-stats {
+  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-slate-400;
+
+  strong {
+    @apply text-slate-300;
+  }
+}
+
+.context-usage-window {
+  @apply ml-auto text-slate-600;
+}
+
 /* xs/sm: hidden — md: narrow — lg/xl: progressively wider */
 aside {
   @apply overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;

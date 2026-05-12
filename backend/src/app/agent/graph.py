@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Annotated, AsyncIterator, Literal, TypedDict
 
+import tiktoken
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -24,6 +25,7 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
     ToolMessage,
+    trim_messages,
 )
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis import AsyncRedisSaver
@@ -53,9 +55,26 @@ def _bind_session(session_id: str):
         _current_session.reset(token)
 
 
+_enc = tiktoken.get_encoding("cl100k_base")
+
+
+def _estimate_tokens(messages: list[AnyMessage]) -> int:
+    total = 0
+    for m in messages:
+        content = m.content
+        if isinstance(content, str):
+            total += len(_enc.encode(content))
+        elif isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    total += len(_enc.encode(part["text"]))
+    return total
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     cached: bool
+    last_usage: dict
 
 
 _TOOLS = build_tools(_session_id)
@@ -108,8 +127,26 @@ def _inject_file_urls(messages: list[AnyMessage]) -> list[AnyMessage]:
 
 
 async def _agent_node(state: AgentState) -> dict:
-    resp = await _LLM.ainvoke([_SYSTEM, *_inject_file_urls(state["messages"])])
-    return {"messages": [resp]}
+    msgs = trim_messages(
+        [_SYSTEM, *_inject_file_urls(state["messages"])],
+        max_tokens=settings.context_window_token_limit,
+        strategy="last",
+        token_counter=_estimate_tokens,
+        include_system=True,
+        allow_partial=False,
+        start_on="human",
+    )
+    estimated = _estimate_tokens(msgs)
+    resp = await _LLM.ainvoke(msgs)
+    usage = resp.usage_metadata or {}
+    return {
+        "messages": [resp],
+        "last_usage": {
+            "estimated_tokens": estimated,
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        },
+    }
 
 
 def _route_after_agent(state: AgentState) -> Literal["tools", "cache_store"]:
@@ -194,7 +231,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver):
             "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
         )
 
-    return g.compile(checkpointer=checkpointer)
+    return g.compile(checkpointer=checkpointer, debug=True)
 
 
 _graph = None
@@ -316,3 +353,8 @@ async def run_agent_stream(
                                         "content": msg.content,
                                     },
                                 }
+                    if node_name == "agent" and update.get("last_usage"):
+                        yield {
+                            "type": "usage",
+                            "data": update["last_usage"],
+                        }
