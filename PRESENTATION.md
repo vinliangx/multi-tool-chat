@@ -51,4 +51,4 @@ Ask the same question twice — second response is instant, badge shows CACHE.
 
 ## 1. Issue #1
 
-Prompt: Find all Hiking Backpack transactions
+Prompt: `Find all Hiking Backpack transactions`
