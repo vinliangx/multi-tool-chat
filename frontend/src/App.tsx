@@ -6,6 +6,7 @@ import BubbleUser from "./components/BubbleUser";
 import { ChatBox } from "./components/ChatBox";
 import ChatLoadingIndicator from "./components/ChatLoadingIndicator";
 import ConfirmDialog from "./components/ConfirmDialog";
+import ContextUsageBadge from "./components/ContextUsageBadge";
 import { FileUploadItem } from "./components/FileUpload";
 import Header from "./components/Header";
 import NavBar from "./components/NavBar";
@@ -15,6 +16,7 @@ type ToolCall = {
   name: string;
   args: Record<string, unknown>;
   result?: string;
+  summarizeProgress?: { current: number; total: number };
 };
 
 type Item =
@@ -43,6 +45,12 @@ export function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [keepReasoningExpanded, setKeepReasoningExpanded] = useState(false);
+  const [contextUsage, setContextUsage] = useState<{
+    input_tokens: number;
+    output_tokens: number;
+    estimated_tokens: number;
+  } | null>(null);
+  const [contextWindowLimit, setContextWindowLimit] = useState(200_000);
   const [confirm, setConfirm] = useState<{
     message: string;
     onConfirm: () => void;
@@ -71,6 +79,12 @@ export function App() {
 
   useEffect(loadSessions, [activeSessionId]);
 
+  useEffect(() => {
+    fetch(`/config`)
+      .then((r) => r.json())
+      .then((data) => setContextWindowLimit(data.context_window_token_limit));
+  }, []);
+
   const send = useCallback(async () => {
     const textMessages: string[] = [input.trim()];
     if (!textMessages || busy) return;
@@ -90,6 +104,7 @@ export function App() {
     ]);
     setInput("");
     setFiles([]);
+    setContextUsage(null);
     setBusy(true);
 
     try {
@@ -144,12 +159,50 @@ export function App() {
             args: data.args,
           };
           setItems((xs) => [...xs, { kind: "tool", call }]);
+        } else if (evt === "summarize_progress") {
+          setItems((xs) => {
+            // Find the last pending tool call with this name (no result yet)
+            let targetIdx = -1;
+            for (let i = xs.length - 1; i >= 0; i--) {
+              const it = xs[i];
+              if (
+                it.kind === "tool" &&
+                it.call.name === data.tool_name &&
+                !it.call.result
+              ) {
+                targetIdx = i;
+                break;
+              }
+            }
+            if (targetIdx === -1) return xs;
+            return xs.map((it, i) =>
+              i === targetIdx && it.kind === "tool"
+                ? {
+                    ...it,
+                    call: {
+                      ...it.call,
+                      summarizeProgress: {
+                        current: data.current,
+                        total: data.total,
+                      },
+                    },
+                  }
+                : it,
+            );
+          });
         } else if (evt === "tool_result") {
           const handle = JSON.stringify(data.content);
           setItems((xs) =>
             xs.map((it) =>
               it.kind === "tool" && it.call.id === data.tool_call_id
-                ? { kind: "tool", call: { ...it.call, result: handle } }
+                ? {
+                    kind: "tool",
+                    call: {
+                      ...it.call,
+                      result: handle,
+                      summarizeProgress: undefined,
+                    },
+                  }
                 : it,
             ),
           );
@@ -167,6 +220,12 @@ export function App() {
                 source: data.source,
               },
             ];
+          });
+        } else if (evt === "usage") {
+          setContextUsage({
+            input_tokens: data.input_tokens,
+            output_tokens: data.output_tokens,
+            estimated_tokens: data.estimated_tokens,
           });
         } else if (evt === "done") {
           setBusy(false);
@@ -190,7 +249,7 @@ export function App() {
           }
           if (dataStr && evt) {
             handleEvent(evt, JSON.parse(dataStr));
-            break;
+            dataStr = "";
           }
         }
       }
@@ -226,6 +285,7 @@ export function App() {
     setItems([]);
     setMessages([]);
     setLoadingHistory(true);
+    setContextUsage(null);
     try {
       const resp = await fetch(`/sessions/${session_id}/messages`);
       const data: Item[] = await resp.json();
@@ -248,6 +308,7 @@ export function App() {
         setItems([]);
         setMessages([]);
         inputRef.current?.focus();
+        setContextUsage(null);
       },
     );
   };
@@ -307,6 +368,7 @@ export function App() {
                 if (it.kind === "reasoning_token")
                   return (
                     <BubbleReasoning
+                      key={i}
                       text={it.text}
                       reasoningExpanded={keepReasoningExpanded}
                     />
@@ -331,12 +393,27 @@ export function App() {
                     result={it.call.result}
                     args={it.call.args}
                     name={it.call.name}
+                    summarizeProgress={busy ? it.call.summarizeProgress : null}
+                    onCancel={() =>
+                      withConfirm("Cancel tool?", () => {
+                        abortRef.current?.abort();
+                        setBusy(false);
+                      })
+                    }
                   />
                 );
               })}
 
-              <ChatLoadingIndicator loading={loadingHistory || busy} />
+              {contextUsage && !busy && (
+                <ContextUsageBadge
+                  inputTokens={contextUsage.input_tokens}
+                  outputTokens={contextUsage.output_tokens}
+                  estimatedTokens={contextUsage.estimated_tokens}
+                  contextWindowLimit={contextWindowLimit}
+                />
+              )}
 
+              <ChatLoadingIndicator loading={loadingHistory || busy} />
               <div ref={bottomRef} />
             </div>
           )}

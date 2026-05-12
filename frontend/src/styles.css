@@ -51,7 +51,9 @@ main {
 
 .chat-input {
   @apply h-fit max-h-14 min-h-2 w-full sm:max-h-50 sm:min-h-18 md:min-h-15;
-  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300 shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300;
+  @apply shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+  @apply border-amber-500 transition-all duration-200 focus:border;
 }
 
 .chat-assistant {
@@ -85,8 +87,32 @@ main {
   @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-800 border-b-slate-800 bg-gray-900 p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
 }
 
+.context-usage-badge {
+  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg bg-gray-700 p-4 px-3 shadow-xl shadow-slate-900;
+}
+
+.context-usage-bar-track {
+  @apply h-2 w-full overflow-hidden rounded-full bg-slate-500;
+}
+
+.context-usage-bar-fill {
+  @apply h-full rounded-full bg-blue-500 transition-all duration-500;
+}
+
+.context-usage-stats {
+  @apply flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[70%] text-slate-200;
+
+  strong {
+    @apply text-slate-400;
+  }
+}
+
+.context-usage-window {
+  @apply ml-auto text-slate-400;
+}
+
 /* xs/sm: hidden — md: narrow — lg/xl: progressively wider */
 aside {
-  @apply overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;
+  @apply z-10 overflow-auto text-white max-md:hidden md:w-56 lg:w-68 xl:w-80;
   @apply [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
 }

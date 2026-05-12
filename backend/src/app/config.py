@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     tool_results_table: str = "chat-tool-results"
     tool_results_bucket: str = "chat-tool-results-local"
 
-    tool_result_inline_token_limit: int = 1500
+    tool_result_inline_token_limit: int = 4000
     tool_result_summarize_token_limit: int = 8000
+    context_window_token_limit: int = 16000
 
     cors_origins: list[str] = ["http://localhost:5173"]
     redis_url: str = "redis://localhost:6379"

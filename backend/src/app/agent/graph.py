@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Annotated, AsyncIterator, Literal, TypedDict
 
+import tiktoken
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -24,6 +25,7 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
     ToolMessage,
+    trim_messages,
 )
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis import AsyncRedisSaver
@@ -33,6 +35,7 @@ from langgraph.prebuilt import ToolNode
 from redisvl.extensions.cache.llm import SemanticCache
 
 from app.agent.llm import build_chat_llm
+from app.agent.summarizer import _progress_queue as _summarizer_progress_queue
 from app.agent.vectorizer import build_vectorizer_llm
 from app.config import settings
 from app.tools import build_tools
@@ -53,9 +56,26 @@ def _bind_session(session_id: str):
         _current_session.reset(token)
 
 
+_enc = tiktoken.get_encoding("cl100k_base")
+
+
+def _estimate_tokens(messages: list[AnyMessage]) -> int:
+    total = 0
+    for m in messages:
+        content = m.content
+        if isinstance(content, str):
+            total += len(_enc.encode(content))
+        elif isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    total += len(_enc.encode(part["text"]))
+    return total
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     cached: bool
+    last_usage: dict
 
 
 _TOOLS = build_tools(_session_id)
@@ -108,8 +128,29 @@ def _inject_file_urls(messages: list[AnyMessage]) -> list[AnyMessage]:
 
 
 async def _agent_node(state: AgentState) -> dict:
-    resp = await _LLM.ainvoke([_SYSTEM, *_inject_file_urls(state["messages"])])
-    return {"messages": [resp]}
+    msgs = [_SYSTEM, *_inject_file_urls(state["messages"])]
+    estimated = _estimate_tokens(msgs)
+    if estimated > settings.context_window_token_limit:
+        msgs = trim_messages(
+            msgs,
+            max_tokens=settings.context_window_token_limit,
+            strategy="last",
+            token_counter=_estimate_tokens,
+            include_system=True,
+            allow_partial=False,
+            start_on="human",
+        )
+        estimated = _estimate_tokens(msgs)
+    resp = await _LLM.ainvoke(msgs)
+    usage = resp.usage_metadata or {}
+    return {
+        "messages": [resp],
+        "last_usage": {
+            "estimated_tokens": estimated,
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        },
+    }
 
 
 def _route_after_agent(state: AgentState) -> Literal["tools", "cache_store"]:
@@ -236,10 +277,11 @@ async def run_agent_stream(
     """Yield events from a single chat turn.
 
     Event types:
-      token       — incremental assistant text (currently emitted as one block)
-      tool_call   — agent invoked a tool {name, args, id}
-      tool_result — tool's session-manager view {name, view}
-      message     — final assistant message
+      token              — incremental assistant text
+      tool_call          — agent invoked a tool {name, args, id}
+      tool_result        — tool's session-manager view {name, view}
+      summarize_progress — chunk progress while summarizing a large result
+      message            — final assistant message
     """
     initial: AgentState = {
         "messages": [
@@ -249,70 +291,97 @@ async def run_agent_stream(
             )
         ],
     }
-    config = {
-        "configurable": {
-            "thread_id": session_id,
-        }
-    }
+    config = {"configurable": {"thread_id": session_id}}
 
     graph = await _get_graph()
 
-    with _bind_session(session_id):
-        async for stream_type, event in graph.astream(
-            initial, stream_mode=["updates", "messages"], config=config
-        ):
-            if stream_type == "messages":
-                msg_chunk, metadata = event
-                if (
-                    isinstance(msg_chunk, AIMessageChunk)
-                    and isinstance(msg_chunk.content, str)
-                    and msg_chunk.content
-                    and metadata.get("langgraph_node") == "agent"
+    # Shared queue: graph events are fed by a background task; the summarizer
+    # (running inside ToolNode) puts progress events directly via ContextVar.
+    event_queue: asyncio.Queue = asyncio.Queue()
+    progress_token = _summarizer_progress_queue.set(event_queue)
+
+    async def _feed():
+        try:
+            with _bind_session(session_id):
+                async for stream_type, event in graph.astream(
+                    initial, stream_mode=["updates", "messages"], config=config
                 ):
-                    yield {"type": "token", "data": {"content": msg_chunk.content}}
-                elif (
-                    isinstance(msg_chunk, AIMessageChunk)
-                    and isinstance(msg_chunk.content, str)
-                    and "reasoning_content" in msg_chunk.additional_kwargs
-                ):
-                    yield {
-                        "type": "reasoning_token",
-                        "data": {
-                            "content": msg_chunk.additional_kwargs["reasoning_content"]
-                        },
-                    }
-            elif stream_type == "updates":
-                for node_name, update in event.items():
-                    if update is not None:
-                        for msg in update.get("messages", []):
-                            if isinstance(msg, AIMessage):
-                                for tc in msg.tool_calls or []:
-                                    yield {
-                                        "type": "tool_call",
-                                        "data": {
-                                            "id": tc["id"],
-                                            "name": tc["name"],
-                                            "args": tc["args"],
-                                        },
-                                    }
-                                if msg.content:
-                                    yield {
-                                        "type": "message",
-                                        "data": {
-                                            "role": "assistant",
-                                            "content": msg.content,
-                                            "source": (
-                                                "CACHE"
-                                                if node_name == "cache_lookup"
-                                                else "LLM"
-                                            ),
-                                        },
-                                    }
-                            elif isinstance(msg, ToolMessage):
-                                yield {
-                                    "type": "tool_result",
+                    await event_queue.put(("graph", stream_type, event))
+        except Exception as exc:
+            await event_queue.put(("error", exc))
+            return
+        await event_queue.put(("done", None))
+
+    feed_task = asyncio.create_task(_feed())
+
+    def _process_graph_event(stream_type: str, event):
+        """Convert a raw graph event into zero or more yield-able dicts."""
+        out = []
+        if stream_type == "messages":
+            msg_chunk, metadata = event
+            if (
+                isinstance(msg_chunk, AIMessageChunk)
+                and isinstance(msg_chunk.content, str)
+                and msg_chunk.content
+                and metadata.get("langgraph_node") == "agent"
+            ):
+                out.append({"type": "token", "data": {"content": msg_chunk.content}})
+            elif (
+                isinstance(msg_chunk, AIMessageChunk)
+                and isinstance(msg_chunk.content, str)
+                and "reasoning_content" in msg_chunk.additional_kwargs
+            ):
+                out.append({
+                    "type": "reasoning_token",
+                    "data": {"content": msg_chunk.additional_kwargs["reasoning_content"]},
+                })
+        elif stream_type == "updates":
+            for node_name, update in event.items():
+                if update is not None:
+                    for msg in update.get("messages", []):
+                        if isinstance(msg, AIMessage):
+                            for tc in msg.tool_calls or []:
+                                out.append({
+                                    "type": "tool_call",
+                                    "data": {"id": tc["id"], "name": tc["name"], "args": tc["args"]},
+                                })
+                            if msg.content:
+                                out.append({
+                                    "type": "message",
                                     "data": {
-                                        "tool_call_id": msg.tool_call_id,
+                                        "role": "assistant",
                                         "content": msg.content,
+                                        "source": "CACHE" if node_name == "cache_lookup" else "LLM",
                                     },
-                                }
+                                })
+                        elif isinstance(msg, ToolMessage):
+                            out.append({
+                                "type": "tool_result",
+                                "data": {"tool_call_id": msg.tool_call_id, "content": msg.content},
+                            })
+                if node_name == "agent" and update.get("last_usage"):
+                    out.append({"type": "usage", "data": update["last_usage"]})
+        return out
+
+    try:
+        while True:
+            item = await event_queue.get()
+            kind = item[0]
+            if kind == "done":
+                break
+            elif kind == "error":
+                raise item[1]
+            elif kind == "progress":
+                yield item[1]
+            else:  # "graph"
+                _, stream_type, event = item
+                for evt in _process_graph_event(stream_type, event):
+                    yield evt
+    finally:
+        _summarizer_progress_queue.reset(progress_token)
+        if not feed_task.done():
+            feed_task.cancel()
+            try:
+                await feed_task
+            except asyncio.CancelledError:
+                pass

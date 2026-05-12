@@ -70,7 +70,7 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
     <div className="relative flex-col self-center" ref={menuRef}>
       {/* Popup Menu Content */}
       {isOpen && (
-        <div className="float absolute -top-30 -left-20 z-10 mt-2 rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-800">
+        <div className="float absolute mt-2 rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-800 sm:-top-30 sm:left-0 md:-top-30 md:-left-20">
           <ul className="gap-20">
             <li className="px-4 py-2 text-slate-400">Options</li>
             <li className="py-3">

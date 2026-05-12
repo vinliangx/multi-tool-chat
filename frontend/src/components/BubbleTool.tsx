@@ -1,23 +1,48 @@
+import { faSpinner } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useState } from "react";
 
 export type BubbleToolArgs = {
   name: string;
   args: any;
   result?: string;
+  summarizeProgress?: { current: number; total: number } | null;
+  onCancel?: () => void;
 };
 
-export default function BubbleTool({ name, result, args }: BubbleToolArgs) {
+export default function BubbleTool({
+  name,
+  result,
+  args,
+  summarizeProgress,
+  onCancel,
+}: BubbleToolArgs) {
   const data = result ? JSON.parse(result) : undefined;
   const [showResults, setShowResults] = useState(false);
   return (
-    <div className="flex flex-col py-2">
+    <div className="flex flex-col py-4">
       <div className="chat-tool">
         <div
-          className="cursor-pointer text-[80%] text-gray-100"
+          className="flex cursor-pointer text-[100%] text-gray-100"
           onClick={() => setShowResults(!showResults)}
         >
-          Using tool [
-          <span className="font-semibold text-blue-400">{name}</span>]
+          <div className="flex-none items-start gap-1">
+            Using tool [
+            <span className="font-semibold text-blue-400">{name}</span>]
+          </div>
+          {summarizeProgress && !result && (
+            <div className="ml-auto align-middle font-bold text-gray-200">
+              Chunks {summarizeProgress?.current ?? 0}/
+              {summarizeProgress?.total ?? 0}
+              <FontAwesomeIcon icon={faSpinner} spin className="ml-2" />
+              <button
+                className="ml-4 cursor-pointer text-blue-300"
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
         {showResults && (
           <div className="mt-1">
