@@ -27,7 +27,7 @@ export default function NavBar({
           >
             <button
               onClick={() => reuseSession(it.session_id)}
-              className="w-full px-4 py-1 text-left hover:cursor-pointer"
+              className="text-overflow-ellipsis line-clamp-2 w-full px-4 py-1 text-left hover:cursor-pointer"
             >
               <div className="flex-col items-center justify-center">
                 <div
