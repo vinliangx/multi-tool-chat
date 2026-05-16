@@ -13,7 +13,7 @@ class PaymentToCreditCardArgs(BaseModel):
 class PaymentToCreditCardPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "payment_to_credit_card"
+        return "personal_finance.payment_to_credit_card"
 
     @property
     def description(self) -> str:

@@ -33,7 +33,7 @@ class AddExpenseArgs(BaseModel):
 class AddExpensePlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "add_expense"
+        return "personal_finance.add_expense"
 
     @property
     def description(self) -> str:
@@ -71,7 +71,10 @@ class AddExpensePlugin(ToolPlugin):
                       AND date=$4::date
                     LIMIT 1
                     """,
-                    user_id, amount, description, date_str,
+                    user_id,
+                    amount,
+                    description,
+                    date_str,
                 )
                 if existing is not None:
                     incoming = {
@@ -110,7 +113,11 @@ class AddExpensePlugin(ToolPlugin):
                 VALUES ($1, $2, $3, $4::date, $5)
                 RETURNING id
                 """,
-                user_id, amount, description, date_str, category,
+                user_id,
+                amount,
+                description,
+                date_str,
+                category,
             )
             if force:
                 await conn.execute(
@@ -122,7 +129,10 @@ class AddExpensePlugin(ToolPlugin):
                       AND lower(existing_entry->>'description')=lower($3)
                       AND existing_entry->>'date'=$4
                     """,
-                    user_id, amount, description, date_str,
+                    user_id,
+                    amount,
+                    description,
+                    date_str,
                 )
 
         return (

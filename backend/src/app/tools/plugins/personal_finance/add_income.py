@@ -10,9 +10,13 @@ class AddIncomeArgs(BaseModel):
     user_id: str = Field(..., description="User identifier")
     amount: float = Field(..., description="Income amount in dollars")
     source: str = Field(..., description="Source label, e.g. 'Salary', 'Freelance'")
-    month: int = Field(..., ge=1, le=12, description="Month the income applies to (1-12)")
+    month: int = Field(
+        ..., ge=1, le=12, description="Month the income applies to (1-12)"
+    )
     year: int = Field(..., ge=2000, description="Year the income applies to")
-    recurring: bool = Field(False, description="If true, auto-projects into subsequent months")
+    recurring: bool = Field(
+        False, description="If true, auto-projects into subsequent months"
+    )
     force: bool = Field(
         False,
         description="Set to true to proceed with insertion even if a duplicate is detected",
@@ -22,7 +26,7 @@ class AddIncomeArgs(BaseModel):
 class AddIncomePlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "add_income"
+        return "personal_finance.add_income"
 
     @property
     def description(self) -> str:
@@ -62,7 +66,11 @@ class AddIncomePlugin(ToolPlugin):
                       AND year=$5
                     LIMIT 1
                     """,
-                    user_id, amount, source, month, year,
+                    user_id,
+                    amount,
+                    source,
+                    month,
+                    year,
                 )
                 if existing is not None:
                     incoming = {
@@ -103,7 +111,12 @@ class AddIncomePlugin(ToolPlugin):
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
                 """,
-                user_id, amount, source, month, year, recurring,
+                user_id,
+                amount,
+                source,
+                month,
+                year,
+                recurring,
             )
             # Clear matching conflicts that were resolved by force
             if force:
@@ -117,7 +130,11 @@ class AddIncomePlugin(ToolPlugin):
                       AND (existing_entry->>'month')::int=$4
                       AND (existing_entry->>'year')::int=$5
                     """,
-                    user_id, amount, source, month, year,
+                    user_id,
+                    amount,
+                    source,
+                    month,
+                    year,
                 )
 
         return f"Income entry saved (id={row['id']}): ${amount:,.2f} from '{source}' for {month}/{year}."

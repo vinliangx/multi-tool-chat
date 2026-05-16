@@ -11,7 +11,7 @@ class ListConflictsArgs(BaseModel):
 class ListConflictsPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "list_conflicts"
+        return "personal_finance.list_conflicts"
 
     @property
     def description(self) -> str:

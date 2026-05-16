@@ -1,4 +1,4 @@
-import { faSpinner } from "@fortawesome/free-solid-svg-icons";
+import { faSpinner, faWrench } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useState } from "react";
 
@@ -20,15 +20,15 @@ export default function BubbleTool({
   const data = result ? JSON.parse(result) : undefined;
   const [showResults, setShowResults] = useState(false);
   return (
-    <div className="flex flex-col py-4">
-      <div className="chat-tool">
+    <div className="chat-tool-wrapper">
+      <div className="">
         <div
-          className="flex cursor-pointer text-[100%] text-gray-100"
+          className="additional-process-preview-action"
           onClick={() => setShowResults(!showResults)}
         >
           <div className="flex-none items-start gap-1">
-            Using tool [
-            <span className="font-semibold text-blue-400">{name}</span>]
+            <FontAwesomeIcon icon={faWrench} className="mr-2" />
+            Using tool [<span className="highlight">{name}</span>]
           </div>
           {summarizeProgress && !result && (
             <div className="ml-auto align-middle font-bold text-gray-200">
@@ -45,16 +45,14 @@ export default function BubbleTool({
           )}
         </div>
         {showResults && (
-          <div className="mt-1">
-            <p className="py-2 text-white">Args:</p>
-            <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
-              {JSON.stringify(args)}
-            </pre>
+          <div className="chat-tool mt-1">
+            <p className="py-0 text-white">Args:</p>
+            <pre className="">{JSON.stringify(args)}</pre>
             {result !== undefined && (
-              <p className="py-2 text-white">Response:</p>
+              <p className="py-0 text-white">Response:</p>
             )}
             {result !== undefined && (
-              <pre className="mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200">
+              <pre className="mt-1.5 mb-2 wrap-break-word whitespace-pre-wrap text-amber-200">
                 {data}
               </pre>
             )}

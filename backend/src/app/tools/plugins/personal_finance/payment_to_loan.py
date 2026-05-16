@@ -13,7 +13,7 @@ class PaymentToLoanArgs(BaseModel):
 class PaymentToLoanPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "payment_to_loan"
+        return "personal_finance.payment_to_loan"
 
     @property
     def description(self) -> str:

@@ -5,7 +5,9 @@ export type BubbleAssistantArgs = { text: string; source: string };
 export default function BubbleAssistant({ text, source }: BubbleAssistantArgs) {
   return (
     <div className="flex max-w-full min-w-full flex-col py-2">
-      <div className="self-start text-[80%] text-gray-300">Assistant</div>
+      <div className="mb-1.5 self-start text-[80%] text-gray-300">
+        Assistant
+      </div>
       <div className="chat-assistant">
         <div className="chat-markdown-safe">
           <MarkdownPreview remarkPlugins={[remarkGfm]}>{text}</MarkdownPreview>

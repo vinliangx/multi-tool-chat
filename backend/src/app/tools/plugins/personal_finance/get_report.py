@@ -14,7 +14,7 @@ class GetReportArgs(BaseModel):
 class GetReportPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "get_report"
+        return "personal_finance.get_report"
 
     @property
     def description(self) -> str:
@@ -44,7 +44,9 @@ class GetReportPlugin(ToolPlugin):
             explicit_income: float = float(
                 await conn.fetchval(
                     "SELECT COALESCE(SUM(amount), 0) FROM income WHERE user_id=$1 AND month=$2 AND year=$3",
-                    user_id, month, year,
+                    user_id,
+                    month,
+                    year,
                 )
             )
 
@@ -58,11 +60,15 @@ class GetReportPlugin(ToolPlugin):
                   AND NOT (month=$2 AND year=$3)
                 ORDER BY lower(source), year DESC, month DESC
                 """,
-                user_id, month, year,
+                user_id,
+                month,
+                year,
             )
             explicit_sources_rows = await conn.fetch(
                 "SELECT lower(source) AS src FROM income WHERE user_id=$1 AND month=$2 AND year=$3",
-                user_id, month, year,
+                user_id,
+                month,
+                year,
             )
             explicit_sources = {r["src"] for r in explicit_sources_rows}
             recurring_income = sum(
@@ -165,7 +171,9 @@ class GetReportPlugin(ToolPlugin):
                     f"util {utilization:>5.1f}%  avail ${available:>9,.2f}  "
                     f"APR {float(r['apr']):.2f}%  min ${float(r['min_payment']):>7,.2f}  due day {r['due_date']}"
                 )
-            overall_util = (total_cc_balance / total_cc_limit * 100) if total_cc_limit > 0 else 0.0
+            overall_util = (
+                (total_cc_balance / total_cc_limit * 100) if total_cc_limit > 0 else 0.0
+            )
             lines.append(
                 f"  {'TOTAL':<24} balance ${total_cc_balance:>9,.2f} / ${total_cc_limit:>9,.2f}  "
                 f"util {overall_util:>5.1f}%"
@@ -177,7 +185,9 @@ class GetReportPlugin(ToolPlugin):
             for r in loan_rows:
                 balance = float(r["balance"])
                 original = float(r["original_amount"])
-                paid_pct = ((original - balance) / original * 100) if original > 0 else 0.0
+                paid_pct = (
+                    ((original - balance) / original * 100) if original > 0 else 0.0
+                )
                 total_loan_balance += balance
                 lines.append(
                     f"  {r['name']:<24} balance ${balance:>9,.2f} / ${original:>9,.2f}  "

@@ -20,7 +20,7 @@ class AddLoanArgs(BaseModel):
 class AddLoanPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "add_loan"
+        return "personal_finance.add_loan"
 
     @property
     def description(self) -> str:

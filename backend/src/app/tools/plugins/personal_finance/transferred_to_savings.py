@@ -8,7 +8,9 @@ from app.tools.plugins.personal_finance.db import get_pool
 
 class TransferredToSavingsArgs(BaseModel):
     user_id: str = Field(..., description="User identifier")
-    amount: float = Field(..., gt=0, description="Amount transferred to savings in dollars")
+    amount: float = Field(
+        ..., gt=0, description="Amount transferred to savings in dollars"
+    )
     date: str = Field(
         default_factory=lambda: date.today().isoformat(),
         description="Transfer date in YYYY-MM-DD format (defaults to today)",
@@ -19,7 +21,7 @@ class TransferredToSavingsArgs(BaseModel):
 class TransferredToSavingsPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "transferred_to_savings"
+        return "personal_finance.transferred_to_savings"
 
     @property
     def description(self) -> str:

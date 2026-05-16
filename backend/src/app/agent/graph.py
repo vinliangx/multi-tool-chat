@@ -368,7 +368,6 @@ async def run_agent_stream(
                             )
                 if node_name == "agent" and update.get("last_usage"):
                     out.append({"type": "usage", "data": update["last_usage"]})
-                    out.append({"type": "done", "data": "{}"})
         return out
 
     try:

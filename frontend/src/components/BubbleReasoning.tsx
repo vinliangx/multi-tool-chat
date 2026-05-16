@@ -13,19 +13,19 @@ export default function BubbleReasoning({
   const [showDetails, setShowDetails] = useState(reasoningExpanded);
   useEffect(() => setShowDetails(reasoningExpanded), [reasoningExpanded]);
   return (
-    <div className="flex flex-col py-2">
-      <div className="chat-reasoning">
+    <div className="flex flex-col">
+      <div className="chat-reasoning-wrapper">
         {text !== undefined && (
-          <div className="mt-1">
+          <div className="mt-1 text-[95%]">
             <div
-              className="cursor-pointer flex-row justify-center self-center text-gray-200"
+              className="additional-process-preview-action"
               onClick={() => setShowDetails(!showDetails)}
             >
-              <FontAwesomeIcon icon={faBrain} className="mx-2" />
+              <FontAwesomeIcon icon={faBrain} className="mr-2" />
               Reasoning
             </div>
             {showDetails && (
-              <div className="m-2">
+              <div className="chat-reasoning">
                 <MarkdownPreview remarkPlugins={[remarkGfm]}>
                   {text}
                 </MarkdownPreview>

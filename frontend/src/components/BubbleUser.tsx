@@ -5,9 +5,9 @@ export type BubbleUserArgs = { text: string; label: string };
 
 export default function BubbleUser({ label, text }: BubbleUserArgs) {
   return (
-    <div className="flex flex-col py-2">
-      <div className="text-blue-200 text-[80%] self-end">{label}</div>
-      <div className="chat-user ">
+    <div className="flex flex-col py-1.5">
+      <div className="self-end text-[80%] text-blue-200">{label}</div>
+      <div className="chat-user">
         <div className="chat-markdown-safe">
           <MarkdownPreview remarkPlugins={[remarkGfm]}>{text}</MarkdownPreview>
         </div>

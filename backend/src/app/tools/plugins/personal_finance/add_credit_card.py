@@ -22,7 +22,7 @@ class AddCreditCardArgs(BaseModel):
 class AddCreditCardPlugin(ToolPlugin):
     @property
     def name(self) -> str:
-        return "add_credit_card"
+        return "personal_finance.add_credit_card"
 
     @property
     def description(self) -> str:
