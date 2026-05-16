@@ -14,12 +14,9 @@ export default function Header({ newSession }: HeaderArgs) {
         </div>
       </div>
       <div>
-        <button
-          className="flex h-18 w-20 cursor-pointer flex-col items-center rounded-full bg-linear-120 from-blue-800 to-blue-600 px-4 py-2 text-2xl text-blue-100 shadow-lg shadow-blue-900 hover:from-blue-700 hover:to-blue-500"
-          onClick={newSession}
-        >
-          <FontAwesomeIcon icon={faPenToSquare} className="pt-2" />
-          <span className="pt-2 text-xs">New</span>
+        <button className="chat-new-button" onClick={newSession}>
+          <FontAwesomeIcon icon={faPenToSquare} />
+          <span>New</span>
         </button>
       </div>
     </div>

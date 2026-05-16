@@ -67,7 +67,7 @@ export function ChatBox({
   return (
     <div className={isNew ? "chat-box-wrapper new" : "chat-box-wrapper"}>
       {isNew && (
-        <div className="mb-10 text-center text-slate-400">
+        <div className="mb-10 text-center text-slate-200">
           <div className="text-3xl font-bold">
             <FontAwesomeIcon icon={faComments} className="mr-2" />
             Start here!
@@ -78,7 +78,7 @@ export function ChatBox({
 
       <div className="mt-2 mb-2 flex items-center justify-center">
         <div className="flex text-[70%]">
-          <div className="text-blue-400 max-sm:hidden">SessionID:</div>
+          <div className="text-blue-200 max-sm:hidden">SessionID:</div>
           <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white max-sm:hidden">
             {sessionId ?? "(New!)"}
           </div>
@@ -98,26 +98,11 @@ export function ChatBox({
         </div>
       </div>
       <div className="chat-box">
-        <div className="flex gap-4">
+        <div className="flex h-20 w-full gap-4">
           <FileUpload filesUploaded={filesUploaded} />
-          <div className="flex-2 items-center justify-center">
-            <textarea
-              id="chatBox"
-              name="chatBox"
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={inputChatKeyPress}
-              placeholder={
-                busy
-                  ? "Thinking"
-                  : "Ask anything, use ↑ and ↓ arrow keys to move between previous messages."
-              }
-              disabled={busy}
-              className="chat-input"
-            />
+          <div className="chat-input-values">
             {files.length > 0 && (
-              <div className="mt-1 flex gap-2">
+              <div className="files-selected">
                 {files.map((f, index) => {
                   return (
                     <FileItem
@@ -133,6 +118,21 @@ export function ChatBox({
                 })}
               </div>
             )}
+            <textarea
+              id="chatBox"
+              name="chatBox"
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={inputChatKeyPress}
+              placeholder={
+                busy
+                  ? "Thinking"
+                  : "Ask anything, use ↑ and ↓ arrow keys to move between previous messages."
+              }
+              disabled={busy}
+              className="chat-input"
+            />
           </div>
           <button
             onClick={send}

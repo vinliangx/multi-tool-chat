@@ -22,42 +22,61 @@ main {
 }
 
 .app-container {
-  @apply bg-linear-120 from-slate-900 to-black;
+  @apply bg-linear-60 from-slate-900 via-sky-900 to-slate-800;
 }
 
 .chat-contents {
   @apply flex h-dvh flex-col;
+  @apply relative;
 }
 
+.bottom-ref {
+  @apply h-35;
+}
+
+.chat-new-button {
+  @apply rounded-xl bg-linear-to-r from-blue-500 via-blue-600 to-blue-700 px-4 py-2.5;
+  @apply text-center text-sm leading-5 font-medium text-white;
+  @apply hover:bg-linear-to-br focus:ring-4 focus:ring-blue-300 focus:outline-none dark:focus:ring-blue-800;
+}
 /* scrollable messages area — flex-1 so chat-box-wrapper stays pinned at bottom */
 .chat-messages {
   @apply flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
-  @apply rounded-bl-4xl bg-gray-900;
-  @apply border-b border-l border-gray-700 bg-gray-950;
+  @apply rounded-bl-4xl bg-transparent;
 }
 
 .chat-box-wrapper {
-  @apply z-10 w-full items-center justify-center pb-2 sm:pb-4;
-
+  @apply z-10 items-center justify-center pb-2 sm:pb-4;
+  @apply bottom-0 left-0 h-fit w-full md:absolute;
   .chat-box {
-    @apply mx-2 w-[calc(100%-1rem)] rounded-2xl bg-linear-to-r from-slate-900 to-slate-900 p-3 shadow-2xl shadow-slate-900 sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
-    @apply ring-1 ring-slate-800;
+    @apply mx-2 w-[calc(100%-1rem)] rounded-xl bg-linear-to-r from-slate-800 via-slate-700 to-blue-950 p-3;
+    @apply sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
+    @apply flex;
+    .chat-input-values {
+      @apply flex h-full w-full flex-col items-center justify-center;
+      .chat-input {
+        @apply w-full flex-2;
+        @apply field-sizing-content resize-none overflow-auto rounded-md bg-gray-300 px-3 py-2;
+        @apply text-[85%] text-gray-900;
+        @apply focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
+        @apply border-amber-500 transition-all duration-200 focus:border;
+      }
+    }
+    .files-selected {
+      @apply flex gap-2;
+      .file-item {
+        @apply mb-2 rounded-xs bg-amber-300 px-2 text-[80%] font-bold text-black;
+      }
+    }
   }
 
   &.new {
-    @apply w-full;
+    @apply bottom-[50%] w-full;
   }
 }
 
-.chat-input {
-  @apply h-fit max-h-14 min-h-2 w-full sm:max-h-50 sm:min-h-18 md:min-h-15;
-  @apply field-sizing-content flex-1 resize-none overflow-auto rounded-md bg-gray-700 px-3 py-2 text-[85%] text-gray-300;
-  @apply shadow-inner ring-1 shadow-slate-800 ring-slate-800 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
-  @apply border-amber-500 transition-all duration-200 focus:border;
-}
-
 .chat-assistant {
-  @apply w-[95%] rounded-r-2xl rounded-bl-2xl bg-linear-120 from-gray-800 to-gray-700 px-3 text-[88%] text-gray-200 shadow-2xl shadow-slate-900 sm:w-[90%] sm:px-4 sm:text-[95%];
+  @apply w-[95%] rounded-r-xl rounded-bl-xl bg-linear-120 from-gray-800 to-gray-700 px-3 text-[88%] text-gray-200 sm:w-[90%] sm:px-4 sm:text-[95%];
   @apply ring ring-slate-800;
 }
 
@@ -67,7 +86,7 @@ main {
 }
 
 .chat-user {
-  @apply max-w-[95%] min-w-[20%] self-end rounded rounded-l-2xl rounded-br-2xl bg-linear-120 from-blue-900 to-blue-700 px-3 text-[88%] whitespace-pre-wrap text-blue-100 shadow-2xl shadow-blue-900 sm:max-w-[90%] sm:px-4 sm:text-[95%];
+  @apply max-w-[95%] min-w-[20%] self-end rounded rounded-l-xl rounded-br-xl bg-linear-120 from-blue-900 to-blue-700 px-3 text-[88%] whitespace-pre-wrap text-blue-100 sm:max-w-[90%] sm:px-4 sm:text-[95%];
   @apply ring ring-blue-700;
 }
 
@@ -76,7 +95,9 @@ main {
 }
 
 .chat-tool {
-  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg border border-slate-900 border-b-slate-800 bg-gray-900 p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
+  @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg;
+  @apply border border-slate-900 border-b-slate-800 bg-gray-900;
+  @apply p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
 
   pre {
     @apply max-w-fit overflow-hidden rounded-xl border border-gray-700 bg-black p-2;
@@ -88,7 +109,7 @@ main {
 }
 
 .context-usage-badge {
-  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg bg-gray-700 p-4 px-3 shadow-xl shadow-slate-900;
+  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg bg-gray-700 p-4 px-3;
 }
 
 .context-usage-bar-track {

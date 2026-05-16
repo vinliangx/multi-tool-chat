@@ -14,7 +14,7 @@ export default function FileItem({ file, onRemove }: FileItemArgs) {
     message: string;
   } | null>(null);
   return (
-    <div className="rounded-2xl bg-amber-300 px-2 text-[80%] font-bold text-black shadow-2xl">
+    <div className="file-item">
       {file.name}
       {onRemove && (
         <FontAwesomeIcon

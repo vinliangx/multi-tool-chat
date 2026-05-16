@@ -9,7 +9,7 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import ContextUsageBadge from "./components/ContextUsageBadge";
 import { FileUploadItem } from "./components/FileUpload";
 import Header from "./components/Header";
-import NavBar from "./components/NavBar";
+import NavSideBar from "./components/NavSideBar";
 
 type ToolCall = {
   id: string;
@@ -342,7 +342,7 @@ export function App() {
       <aside>
         <Header newSession={newSession} />
 
-        <NavBar
+        <NavSideBar
           activeSessionId={activeSessionId}
           sessions={sessions}
           deleteSession={(session_id) =>
@@ -414,7 +414,7 @@ export function App() {
               )}
 
               <ChatLoadingIndicator loading={loadingHistory || busy} />
-              <div ref={bottomRef} />
+              <div className="bottom-ref" ref={bottomRef} />
             </div>
           )}
           <ChatBox
