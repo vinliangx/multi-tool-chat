@@ -51,7 +51,8 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
 
 Key design choices:
 
-- **Session Manager owns the truncation policy.** Every tool routes its output through `record_tool_result`. Small results are returned inline; oversized results are summarized and persisted, with only `{handle, summary, size, ...}` returned to the agent.
+- **Micro kernel architecture.** Tools are `ToolPlugin` subclasses registered with `ToolKernel`. The kernel dispatches calls through `ToolMiddleware` (logging, error handling) before reaching the plugin, then pipes results through `ResultProcessor` for truncation/summarization. Adding a new tool means subclassing `ToolPlugin` and appending to `ALL_PLUGINS`.
+- **`ResultProcessor` owns the truncation policy.** Every tool routes its output through `ResultProcessor.process()`. Small results are returned inline; oversized results are summarized and persisted, with only `{handle, summary, size, ...}` returned to the agent.
 - **`recall(handle)` is an explicit tool.** The agent decides when to bring full content back. This satisfies the requirement: "use metadata from stored results to decide whether a result should be brought back into the context window."
 - **Summarizer is map-reduce.** Truly large payloads are chunked via `RecursiveCharacterTextSplitter`, summarized per chunk, then reduced. Progress events are streamed to the UI during summarization.
 - **Semantic cache.** Redis-backed `SemanticCache` with vector embeddings de-duplicates repeated queries across sessions (shared cache, distance threshold 0.09, 5-minute TTL), returning cached responses without hitting the LLM. Requires Ollama (`LLM_PROVIDER=ollama`) — silently disabled when using Anthropic because Anthropic has no first-party embedding API in LangChain.
@@ -67,15 +68,22 @@ backend/        Python (FastAPI + LangGraph), Pants targets
   src/app/
     api/        HTTP routes (SSE chat stream, session CRUD, upload_url)
     agent/      LangGraph graph, summarizer, semantic cache, vectorizer
-    session/    Session Manager (RedisSessionStore + models)
-    tools/      http_fetch, csv_s3, image_read, sql_query, sql_ddl,
-                sql_dml, weather, recall, save_memory, read_memory
+    session/    Session store + models (RedisSessionStore)
+    tools/
+      kernel.py     ToolKernel — orchestrates plugins + middleware
+      plugin.py     ToolPlugin ABC, ToolContext, KernelServices
+      middleware.py LoggingMiddleware, ErrorHandlingMiddleware
+      plugins/      One file per tool (http_fetch, csv_s3, image_s3,
+                    sql_query, sql_ddl, sql_dml, weather_api,
+                    recall, save_memory, read_memory)
+      services/     ResultProcessor, StorageService, EventBus,
+                    MemoryService, CacheService, MetricsService
     upload/     Presigned S3 URL generation
   tests/
   Dockerfile
 frontend/       React + Vite + TS chat UI
   src/
-    components/ NavBar, Header, ChatBox, FileUpload, FileItem,
+    components/ NavSideBar, Header, ChatBox, FileUpload, FileItem,
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 infra/          Terraform (network, data, compute, frontend modules)
