@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(Get-ChildItem -Path \"C:\\\\Work\\\\Personal\\\\multi-tool-chart\\\\backend\\\\src\\\\app\\\\tools\" -Recurse -Directory)",
-      "Bash(Select-Object FullName)",
-      "Bash(Remove-Item *)"
-    ]
-  }
-}
