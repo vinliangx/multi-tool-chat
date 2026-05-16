@@ -16,6 +16,7 @@ import asyncio
 from typing import Annotated, AsyncIterator, Literal, TypedDict
 
 import tiktoken
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -26,7 +27,6 @@ from langchain_core.messages import (
     trim_messages,
 )
 from langchain_core.tools import BaseTool
-from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
@@ -39,7 +39,6 @@ from app.agent.summarizer import _progress_queue as _summarizer_progress_queue
 from app.agent.vectorizer import build_vectorizer_llm
 from app.config import settings
 from app.tools import create_kernel
-
 
 _enc = tiktoken.get_encoding("cl100k_base")
 
@@ -369,6 +368,7 @@ async def run_agent_stream(
                             )
                 if node_name == "agent" and update.get("last_usage"):
                     out.append({"type": "usage", "data": update["last_usage"]})
+                    out.append({"type": "done", "data": "{}"})
         return out
 
     try:

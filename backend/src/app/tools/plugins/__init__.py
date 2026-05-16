@@ -11,6 +11,15 @@ from app.tools.plugins.weather_api import WeatherPlugin
 from app.tools.plugins.recall import RecallPlugin
 from app.tools.plugins.save_memory import SaveMemoryPlugin
 from app.tools.plugins.read_memory import ReadMemoryPlugin
+from app.tools.plugins.personal_finance.add_credit_card import AddCreditCardPlugin
+from app.tools.plugins.personal_finance.add_loan import AddLoanPlugin
+from app.tools.plugins.personal_finance.add_income import AddIncomePlugin
+from app.tools.plugins.personal_finance.add_expense import AddExpensePlugin
+from app.tools.plugins.personal_finance.get_report import GetReportPlugin
+from app.tools.plugins.personal_finance.list_conflicts import ListConflictsPlugin
+from app.tools.plugins.personal_finance.payment_to_credit_card import PaymentToCreditCardPlugin
+from app.tools.plugins.personal_finance.payment_to_loan import PaymentToLoanPlugin
+from app.tools.plugins.personal_finance.transferred_to_savings import TransferredToSavingsPlugin
 
 ALL_PLUGINS: list[ToolPlugin] = [
     HttpFetchPlugin(),
@@ -23,4 +32,13 @@ ALL_PLUGINS: list[ToolPlugin] = [
     RecallPlugin(),
     SaveMemoryPlugin(),
     ReadMemoryPlugin(),
+    AddCreditCardPlugin(),
+    AddLoanPlugin(),
+    AddIncomePlugin(),
+    AddExpensePlugin(),
+    GetReportPlugin(),
+    ListConflictsPlugin(),
+    PaymentToCreditCardPlugin(),
+    PaymentToLoanPlugin(),
+    TransferredToSavingsPlugin(),
 ]
