@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import csv
 import io
 
@@ -8,39 +6,47 @@ from botocore.client import Config
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.tools.base import make_session_tool
+from app.tools.plugin import ToolContext, ToolPlugin
 
 
 class CsvReadArgs(BaseModel):
-    source: str = Field(
-        ...,
-        description="Reads an s3://bucket/key URL",
-    )
+    source: str = Field(..., description="Reads an s3://bucket/key URL")
     max_rows: int = Field(
         500, description="Cap on rows to return when no filter is applied"
     )
-    filter_column: str | None = Field(
-        None,
-        description=(
-            "Column name to filter on. When provided, ALL rows are scanned and only "
-            "matching rows are returned. Use this whenever you need to search or count "
-            "across the full dataset."
-        ),
-    )
+    filter_column: str | None = Field(None, description="Column name to filter on")
     filter_value: str | None = Field(
-        None,
-        description="Case-insensitive substring to match in filter_column.",
+        None, description="Case-insensitive substring to match in filter_column"
     )
 
 
-async def _run(
-    source: str,
-    max_rows: int = 500,
-    filter_column: str | None = None,
-    filter_value: str | None = None,
-) -> str:
-    assert source.startswith("s3://")
-    try:
+class CsvS3Plugin(ToolPlugin):
+    @property
+    def name(self) -> str:
+        return "csv_read"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Read a CSV file from S3 (s3://bucket/key). "
+            "Use filter_column + filter_value to search ALL rows when looking for specific values; "
+            "without a filter, only the first max_rows rows are returned."
+            "Data may be incomplete if truncated and may have missing information"
+        )
+
+    @property
+    def args_schema(self) -> type[BaseModel]:
+        return CsvReadArgs
+
+    async def execute(self, context: ToolContext, **kwargs) -> str:
+        source = kwargs["source"]
+        max_rows = kwargs.get("max_rows", 500)
+        filter_column = kwargs.get("filter_column")
+        filter_value = kwargs.get("filter_value")
+
+        if not source.startswith("s3://"):
+            return "Error: source must start with s3://"
+
         _, _, rest = source.partition("s3://")
         bucket, _, key = rest.partition("/")
 
@@ -106,21 +112,3 @@ async def _run(
         writer.writeheader()
         writer.writerows(rows_to_show)
         return header + out.getvalue()
-
-    except Exception as e:
-        return f"Error : {e}"
-
-
-def factory(session_id_provider):
-    return make_session_tool(
-        name="csv_read",
-        description=(
-            "Read a CSV file from S3 (s3://bucket/key). "
-            "Use filter_column + filter_value to search ALL rows when looking for specific values; "
-            "without a filter, only the first max_rows rows are returned."
-            "Data may be incomplete if truncated and may have missing information"
-        ),
-        args_schema=CsvReadArgs,
-        runner=_run,
-        session_id_provider=session_id_provider,
-    )

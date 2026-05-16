@@ -13,8 +13,6 @@ recall handle if it wants the raw bytes.
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
-from contextvars import ContextVar
 from typing import Annotated, AsyncIterator, Literal, TypedDict
 
 import tiktoken
@@ -27,6 +25,8 @@ from langchain_core.messages import (
     ToolMessage,
     trim_messages,
 )
+from langchain_core.tools import BaseTool
+from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
@@ -38,22 +38,7 @@ from app.agent.llm import build_chat_llm
 from app.agent.summarizer import _progress_queue as _summarizer_progress_queue
 from app.agent.vectorizer import build_vectorizer_llm
 from app.config import settings
-from app.tools import build_tools
-
-_current_session: ContextVar[str] = ContextVar("session_id", default="")
-
-
-def _session_id() -> str:
-    return _current_session.get()
-
-
-@contextmanager
-def _bind_session(session_id: str):
-    token = _current_session.set(session_id)
-    try:
-        yield
-    finally:
-        _current_session.reset(token)
+from app.tools import create_kernel
 
 
 _enc = tiktoken.get_encoding("cl100k_base")
@@ -78,8 +63,9 @@ class AgentState(TypedDict):
     last_usage: dict
 
 
-_TOOLS = build_tools(_session_id)
-_LLM = build_chat_llm().bind_tools(_TOOLS)
+_kernel = create_kernel()
+_LLM: BaseChatModel | None = None
+_TOOLS: list[BaseTool] = []
 _VECTORIZER = build_vectorizer_llm()  # None when provider has no embedding API
 
 _SYSTEM = SystemMessage(
@@ -244,10 +230,13 @@ _graph_lock = asyncio.Lock()
 
 
 async def _get_graph():
-    global _graph, _checkpointer
+    global _graph, _checkpointer, _TOOLS, _LLM
     if _graph is None:
         async with _graph_lock:
             if _graph is None:
+                await _kernel.init()
+                _TOOLS = _kernel.build_langchain_tools()
+                _LLM = build_chat_llm().bind_tools(_TOOLS)
                 _checkpointer = AsyncRedisSaver(redis_url=settings.redis_url)
                 await _checkpointer.asetup()
                 _graph = _build_graph(_checkpointer)
@@ -302,7 +291,7 @@ async def run_agent_stream(
 
     async def _feed():
         try:
-            with _bind_session(session_id):
+            with _kernel.bind_context(session_id):
                 async for stream_type, event in graph.astream(
                     initial, stream_mode=["updates", "messages"], config=config
                 ):
@@ -331,34 +320,53 @@ async def run_agent_stream(
                 and isinstance(msg_chunk.content, str)
                 and "reasoning_content" in msg_chunk.additional_kwargs
             ):
-                out.append({
-                    "type": "reasoning_token",
-                    "data": {"content": msg_chunk.additional_kwargs["reasoning_content"]},
-                })
+                out.append(
+                    {
+                        "type": "reasoning_token",
+                        "data": {
+                            "content": msg_chunk.additional_kwargs["reasoning_content"]
+                        },
+                    }
+                )
         elif stream_type == "updates":
             for node_name, update in event.items():
                 if update is not None:
                     for msg in update.get("messages", []):
                         if isinstance(msg, AIMessage):
                             for tc in msg.tool_calls or []:
-                                out.append({
-                                    "type": "tool_call",
-                                    "data": {"id": tc["id"], "name": tc["name"], "args": tc["args"]},
-                                })
+                                out.append(
+                                    {
+                                        "type": "tool_call",
+                                        "data": {
+                                            "id": tc["id"],
+                                            "name": tc["name"],
+                                            "args": tc["args"],
+                                        },
+                                    }
+                                )
                             if msg.content:
-                                out.append({
-                                    "type": "message",
-                                    "data": {
-                                        "role": "assistant",
-                                        "content": msg.content,
-                                        "source": "CACHE" if node_name == "cache_lookup" else "LLM",
-                                    },
-                                })
+                                out.append(
+                                    {
+                                        "type": "message",
+                                        "data": {
+                                            "role": "assistant",
+                                            "content": msg.content,
+                                            "source": "CACHE"
+                                            if node_name == "cache_lookup"
+                                            else "LLM",
+                                        },
+                                    }
+                                )
                         elif isinstance(msg, ToolMessage):
-                            out.append({
-                                "type": "tool_result",
-                                "data": {"tool_call_id": msg.tool_call_id, "content": msg.content},
-                            })
+                            out.append(
+                                {
+                                    "type": "tool_result",
+                                    "data": {
+                                        "tool_call_id": msg.tool_call_id,
+                                        "content": msg.content,
+                                    },
+                                }
+                            )
                 if node_name == "agent" and update.get("last_usage"):
                     out.append({"type": "usage", "data": update["last_usage"]})
         return out

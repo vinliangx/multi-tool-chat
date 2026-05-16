@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import base64
 
 import boto3
@@ -8,22 +6,33 @@ from pydantic import BaseModel, Field
 
 from app.agent.vision import vision
 from app.config import settings
-from app.tools.base import make_session_tool
+from app.tools.plugin import ToolContext, ToolPlugin
 
 
 class ImageReadArgs(BaseModel):
     prompt: str = Field(..., description="The user prompt")
-    source: str = Field(
-        ...,
-        description="Reads an s3://bucket/key URL",
-    )
+    source: str = Field(..., description="Reads an s3://bucket/key URL")
 
 
-async def _run(prompt: str, source: str) -> str:
-    assert source.startswith("s3://")
-    try:
+class ImageS3Plugin(ToolPlugin):
+    @property
+    def name(self) -> str:
+        return "image_read"
+
+    @property
+    def description(self) -> str:
+        return "Read a Image file from S3 (s3://bucket/key), OCR Supported."
+
+    @property
+    def args_schema(self) -> type[BaseModel]:
+        return ImageReadArgs
+
+    async def execute(self, context: ToolContext, **kwargs) -> str:
+        prompt = kwargs["prompt"]
+        source = kwargs["source"]
+        if not source.startswith("s3://"):
+            return "Error: source must start with s3://"
         _, _, rest = source.partition("s3://")
-
         bucket, _, key = rest.partition("/")
 
         s3 = boto3.client(
@@ -40,15 +49,3 @@ async def _run(prompt: str, source: str) -> str:
         encoded_string = base64.b64encode(object_content).decode("utf-8")
         result = await vision(prompt=prompt, mime=mime_type, data=encoded_string)
         return f"Image Result: {result}"
-    except Exception as e:
-        return f"Error : {e}"
-
-
-def factory(session_id_provider):
-    return make_session_tool(
-        name="image_read",
-        description="Read a Image file from S3 (s3://bucket/key), OCR Supported.",
-        args_schema=ImageReadArgs,
-        runner=_run,
-        session_id_provider=session_id_provider,
-    )
