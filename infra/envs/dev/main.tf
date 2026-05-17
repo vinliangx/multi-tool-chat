@@ -51,6 +51,7 @@ module "frontend" {
   api_domain = module.compute.alb_dns_name
 }
 
-output "api_url"      { value = module.compute.alb_dns_name }
-output "frontend_url" { value = module.frontend.cloudfront_domain }
-output "ecr_repo"     { value = module.compute.ecr_repository_url }
+output "api_url"              { value = module.compute.alb_dns_name }
+output "frontend_url"         { value = module.frontend.cloudfront_domain }
+output "ecr_repo"             { value = module.compute.ecr_repository_url }
+output "ecr_weather_service"  { value = module.compute.ecr_weather_service_repo_url }

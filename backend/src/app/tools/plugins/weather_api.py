@@ -1,7 +1,11 @@
+import os
+
 import httpx
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
+
+_WEATHER_SERVICE_URL = os.getenv("WEATHER_SERVICE_URL", "http://localhost:8002")
 
 
 class WeatherArgs(BaseModel):
@@ -23,14 +27,15 @@ class WeatherPlugin(ToolPlugin):
         return WeatherArgs
 
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        latitude = kwargs["latitude"]
-        longitude = kwargs["longitude"]
-        url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={latitude}&longitude={longitude}"
-            "&current=temperature_2m,wind_speed_10m"
-            "&hourly=temperature_2m"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{_WEATHER_SERVICE_URL}/weather",
+                json={"latitude": kwargs["latitude"], "longitude": kwargs["longitude"]},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return (
+            f"Current temperature: {data['current_temperature_c']}°C, "
+            f"wind speed: {data['current_wind_speed_kmh']} km/h\n"
+            f"Hourly temperatures (°C): {data['hourly_temperatures_c']}"
         )
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(url)
-        return f"open-meteo {resp.status_code}\n{resp.text}"

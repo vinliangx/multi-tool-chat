@@ -33,7 +33,6 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  save_memory │           │ │
                      │  │  read_memory │           │ │
                      │  │  personal_finance.*      │ │
-                     │  │  mcp_sum     │           │ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
                      │  ┌──────────────┐           │ │
@@ -59,9 +58,9 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                            │ PostgreSQL │  (personal finance data)
                            └────────────┘
 
-                           ┌──────────────────┐
-                           │ MCP Sum Service  │  (mcp_sum tool → POST /sum)
-                           └──────────────────┘
+                           ┌──────────────────────┐
+                           │ MCP Weather Service  │  (weather tool → POST /weather)
+                           └──────────────────────┘
 ```
 
 Key design choices:
@@ -77,7 +76,7 @@ Key design choices:
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 - **Command node.** A `commands_node` at graph entry intercepts slash commands before routing to the agent or cache. `/login <user_id>` triggers a `read_memory` lookup; `/tools` asks the agent to list available tools. All other input routes normally.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
-- **MCP microservice tool.** `mcp_sum` delegates arithmetic to an external `mcp_sum_service` FastAPI microservice (port 8001). It demonstrates how `ToolPlugin` subclasses can call remote HTTP services rather than implementing logic locally; the service is included in Docker Compose and reachable via `SUM_SERVICE_URL`.
+- **MCP microservice tool.** The `weather` plugin delegates to an external `mcp_weather_service` FastAPI microservice (port 8002) rather than calling open-meteo directly. It demonstrates how `ToolPlugin` subclasses can call remote HTTP services rather than implementing logic locally; the service is included in Docker Compose and reachable via `WEATHER_SERVICE_URL`.
 
 ## Layout
 
@@ -93,7 +92,7 @@ backend/        Python (FastAPI + LangGraph), Pants targets
       middleware.py LoggingMiddleware, ErrorHandlingMiddleware
       plugins/      One file per tool (http_fetch, csv_s3, image_s3,
                     sql_query, sql_ddl, sql_dml, weather_api,
-                    recall, save_memory, read_memory, sum_mcp)
+                    recall, save_memory, read_memory)
                     personal_finance/ (add_credit_card, add_loan,
                     add_income, add_expense, get_report,
                     list_conflicts, payment_to_credit_card,
@@ -109,7 +108,7 @@ frontend/       React + Vite + TS chat UI
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 services/
-  mcp_sum_service/  Standalone FastAPI microservice exposing a /sum endpoint
+  mcp_weather_service/  Standalone FastAPI microservice exposing POST /weather
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -182,11 +181,14 @@ cd infra/envs/dev
 terraform init
 terraform apply -var="anthropic_api_key=$ANTHROPIC_API_KEY"
 
-# 2. Build & push the API image to ECR
+# 2. Build & push images to ECR
 ECR=$(terraform output -raw ecr_repo)
+ECR_WEATHER=$(terraform output -raw ecr_weather_service)
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR
 docker build -t $ECR:latest ../../../backend
 docker push $ECR:latest
+docker build -t $ECR_WEATHER:latest ../../../services/mcp_weather_service
+docker push $ECR_WEATHER:latest
 aws ecs update-service --cluster mtc-dev-cluster --service mtc-dev-api --force-new-deployment
 
 # 3. Build & upload frontend
@@ -219,7 +221,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                                                                           |
 | `BUCKET_NAME`                                | S3 bucket for file uploads                                                                                                               |
 | `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)                                                                   |
-| `SUM_SERVICE_URL`                            | URL for the MCP sum microservice (default: `http://localhost:8001`)                                                                      |
+| `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)                                                                  |
 
 ## Tool reference
 
@@ -231,7 +233,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `sql_query`                               | Run a SELECT query against the local SQLite DB                                          |
 | `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                              |
 | `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                 |
-| `weather`                                 | Get current weather for a location                                                      |
+| `weather`                                 | Get current weather for a location via the MCP weather microservice                     |
 | `recall`                                  | Retrieve a full tool-result payload by handle                                           |
 | `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                 |
 | `read_memory`                             | Read stored user facts, likes, and dislikes                                             |
@@ -244,7 +246,6 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                      |
 | `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                             |
 | `personal_finance.transferred_to_savings` | Record a transfer to savings                                                            |
-| `mcp_sum`                                 | Add two numbers via the external MCP sum microservice                                   |
 
 ## Frontend features
 

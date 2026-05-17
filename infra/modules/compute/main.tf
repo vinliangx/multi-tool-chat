@@ -12,6 +12,12 @@ resource "aws_ecr_repository" "api" {
   force_delete         = true
 }
 
+resource "aws_ecr_repository" "weather_service" {
+  name                 = "${var.name}-weather-service"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
 resource "aws_ssm_parameter" "anthropic_key" {
   name  = "/${var.name}/anthropic_api_key"
   type  = "SecureString"
@@ -131,10 +137,11 @@ resource "aws_ecs_task_definition" "api" {
       essential = true
       portMappings = [{ containerPort = 8000 }]
       environment = [
-        { name = "USE_AWS_STORE",       value = "1" },
-        { name = "AWS_REGION",          value = var.region },
-        { name = "TOOL_RESULTS_BUCKET", value = var.tool_results_bucket },
-        { name = "REDIS_URL",           value = "redis://localhost:6379" },
+        { name = "USE_AWS_STORE",        value = "1" },
+        { name = "AWS_REGION",           value = var.region },
+        { name = "TOOL_RESULTS_BUCKET",  value = var.tool_results_bucket },
+        { name = "REDIS_URL",            value = "redis://localhost:6379" },
+        { name = "WEATHER_SERVICE_URL",  value = "http://localhost:8002" },
       ]
       secrets = [
         { name = "ANTHROPIC_API_KEY", valueFrom = aws_ssm_parameter.anthropic_key.arn },
@@ -161,6 +168,20 @@ resource "aws_ecs_task_definition" "api" {
           awslogs-stream-prefix = "redis"
         }
       }
+    },
+    {
+      name      = "mcp-weather-service"
+      image     = "${aws_ecr_repository.weather_service.repository_url}:latest"
+      essential = false
+      portMappings = [{ containerPort = 8002 }]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "weather-service"
+        }
+      }
     }
   ])
 }
@@ -184,5 +205,6 @@ resource "aws_ecs_service" "api" {
   depends_on = [aws_lb_listener.http]
 }
 
-output "alb_dns_name"        { value = aws_lb.this.dns_name }
-output "ecr_repository_url"  { value = aws_ecr_repository.api.repository_url }
+output "alb_dns_name"                    { value = aws_lb.this.dns_name }
+output "ecr_repository_url"              { value = aws_ecr_repository.api.repository_url }
+output "ecr_weather_service_repo_url"    { value = aws_ecr_repository.weather_service.repository_url }
