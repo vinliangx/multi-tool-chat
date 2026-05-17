@@ -13,6 +13,7 @@ recall handle if it wants the raw bytes.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import Annotated, AsyncIterator, Literal, TypedDict
 
 import tiktoken
@@ -197,41 +198,14 @@ def _route_after_cache(state: AgentState):
     return "agent"
 
 
-def _command_node(
-    state: AgentState,
-) -> Command[Literal["agent", "cache_lookup"]]:
-    user_input = state["messages"][-1].content
-    if user_input.startswith("/user"):
-        user_id = user_input.replace("/user", "")
-        return Command(
-            goto="agent",
-            update={
-                "messages": [
-                    HumanMessage(
-                        content=f"Use 'read_memory' to identify user_id: '{user_id}'"
-                    )
-                ]
-            },
-        )
-    if user_input.startswith("/tools"):
-        return Command(
-            goto="agent",
-            update={"messages": [HumanMessage(content="Show me tools")]},
-        )
-    if cache is not None:
-        return Command(goto="cache_lookup")
-    return Command(goto="agent")
-
-
 def _build_graph(checkpointer: BaseCheckpointSaver):
     g = StateGraph(AgentState)
     g.add_node("agent", _agent_node)
-    g.add_node("commands_node", _command_node)
     g.add_node("tools", ToolNode(_TOOLS))
     g.add_edge("tools", "agent")
-    g.add_edge(START, "commands_node")
 
     if cache is not None:
+        g.add_edge(START, "cache_lookup")
         g.add_node("cache_lookup", _cache_lookup_node)
         g.add_node("cache_store", _cache_store_node)
 
@@ -245,7 +219,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver):
         )
         g.add_edge("cache_store", END)
     else:
-        # g.add_edge(START, "agent")
+        g.add_edge(START, "agent")
         g.add_conditional_edges(
             "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
         )
