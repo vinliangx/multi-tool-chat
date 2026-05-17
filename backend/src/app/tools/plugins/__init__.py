@@ -20,6 +20,7 @@ from app.tools.plugins.personal_finance.list_conflicts import ListConflictsPlugi
 from app.tools.plugins.personal_finance.payment_to_credit_card import PaymentToCreditCardPlugin
 from app.tools.plugins.personal_finance.payment_to_loan import PaymentToLoanPlugin
 from app.tools.plugins.personal_finance.transferred_to_savings import TransferredToSavingsPlugin
+from app.tools.plugins.sum_mcp import SumMcpPlugin
 
 ALL_PLUGINS: list[ToolPlugin] = [
     HttpFetchPlugin(),
@@ -41,4 +42,5 @@ ALL_PLUGINS: list[ToolPlugin] = [
     PaymentToCreditCardPlugin(),
     PaymentToLoanPlugin(),
     TransferredToSavingsPlugin(),
+    SumMcpPlugin(),
 ]

@@ -201,8 +201,8 @@ def _command_node(
     state: AgentState,
 ) -> Command[Literal["agent", "cache_lookup"]]:
     user_input = state["messages"][-1].content
-    if user_input.startswith("/login"):
-        user_id = user_input.replace("/login", "")
+    if user_input.startswith("/user"):
+        user_id = user_input.replace("/user", "")
         return Command(
             goto="agent",
             update={
