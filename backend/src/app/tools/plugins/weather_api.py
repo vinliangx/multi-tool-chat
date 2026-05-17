@@ -1,6 +1,8 @@
+import json
 import os
 
-import httpx
+from fastmcp.client import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
@@ -27,13 +29,15 @@ class WeatherPlugin(ToolPlugin):
         return WeatherArgs
 
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{_WEATHER_SERVICE_URL}/weather",
-                json={"latitude": kwargs["latitude"], "longitude": kwargs["longitude"]},
+        transport = StreamableHttpTransport(
+            url=f"{_WEATHER_SERVICE_URL}/mcp",
+        )
+        async with Client(transport) as client:
+            result = await client.call_tool(
+                "get_weather",
+                {"latitude": kwargs["latitude"], "longitude": kwargs["longitude"]},
             )
-            resp.raise_for_status()
-            data = resp.json()
+        data = json.loads(result.content[-1].text)
         return (
             f"Current temperature: {data['current_temperature_c']}°C, "
             f"wind speed: {data['current_wind_speed_kmh']} km/h\n"
