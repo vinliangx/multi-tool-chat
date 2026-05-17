@@ -14,6 +14,10 @@ The system is a full-stack chat application built around a LangGraph agent that 
                                        │  │  START                          │  │
                                        │  │    │                            │  │
                                        │  │    ▼                            │  │
+                                       │  │  commands_node                  │  │
+                                       │  │  (/login /tools or passthrough) │  │
+                                       │  │    │                            │  │
+                                       │  │    ▼                            │  │
                                        │  │  cache_lookup ──hit──▶ END      │  │
                                        │  │    │ miss                       │  │
                                        │  │    ▼                            │  │
@@ -30,33 +34,35 @@ The system is a full-stack chat application built around a LangGraph agent that 
                                        │  Summarizer sub-agent (map-reduce)    │
                                        └───────────────────────────────────────┘
                                                         │
-                              ┌─────────────────────────┤
-                              │                         │
-                              ▼                         ▼
-                           Redis                     S3 / S3-Ninja
-                  sessions · tool results        file uploads
-                  LangGraph checkpoints          CSV reads via csv_s3
-                  semantic cache
-                  long-term memory store
+                              ┌─────────────────────────┼─────────────────┐
+                              │                         │                 │
+                              ▼                         ▼                 ▼
+                           Redis                     S3 / S3-Ninja    PostgreSQL
+                  sessions · tool results        file uploads        personal finance
+                  LangGraph checkpoints          CSV reads via       (credit_cards,
+                  semantic cache                 csv_s3              loans, income,
+                  long-term memory store                             expenses, etc.)
 ```
 
 ### Component Map
 
-| Layer           | Path                                        | Responsibility                                                                                                   |
-| --------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| HTTP API        | `backend/src/app/api/routes.py`             | SSE chat stream, session CRUD, presigned upload URL                                                              |
-| Agent graph     | `backend/src/app/agent/graph.py`            | LangGraph state machine, cache nodes, streaming                                                                  |
-| LLM factory     | `backend/src/app/agent/llm.py`              | Anthropic / Ollama abstraction                                                                                   |
-| Summarizer      | `backend/src/app/agent/summarizer.py`       | Map-reduce sub-agent for oversized tool output                                                                   |
-| Vectorizer      | `backend/src/app/agent/vectorizer.py`       | Embedding model for semantic cache                                                                               |
-| Session manager | `backend/src/app/session/manager.py`        | Truncation policy; persists and sizes every tool result                                                          |
-| Session store   | `backend/src/app/session/store.py`          | `RedisSessionStore` — sessions, payloads, records                                                                |
-| Models          | `backend/src/app/session/models.py`         | `ToolResultRecord`, `SessionRecord`                                                                              |
-| Tool base       | `backend/src/app/tools/base.py`             | `make_session_tool()` — wraps any runner through the session manager                                             |
-| Tools           | `backend/src/app/tools/`                    | `http_fetch`, `csv_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory` |
-| Upload          | `backend/src/app/upload/storage_service.py` | Presigned S3 URL generation                                                                                      |
-| Frontend        | `frontend/src/`                             | React + Vite + Tailwind chat UI with SSE consumer                                                                |
-| Infrastructure  | `infra/`                                    | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                  |
+| Layer               | Path                                                   | Responsibility                                                                                                                         |
+| ------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP API            | `backend/src/app/api/routes.py`                        | SSE chat stream, session CRUD, presigned upload URL                                                                                    |
+| Agent graph         | `backend/src/app/agent/graph.py`                       | LangGraph state machine, command node, cache nodes, streaming                                                                          |
+| LLM factory         | `backend/src/app/agent/llm.py`                         | Anthropic / Ollama abstraction                                                                                                         |
+| Summarizer          | `backend/src/app/agent/summarizer.py`                  | Map-reduce sub-agent for oversized tool output                                                                                         |
+| Vectorizer          | `backend/src/app/agent/vectorizer.py`                  | Embedding model for semantic cache                                                                                                     |
+| Session manager     | `backend/src/app/session/manager.py`                   | Truncation policy; persists and sizes every tool result                                                                                |
+| Session store       | `backend/src/app/session/store.py`                     | `RedisSessionStore` — sessions, payloads, records                                                                                      |
+| Models              | `backend/src/app/session/models.py`                    | `ToolResultRecord`, `SessionRecord`                                                                                                    |
+| Tool kernel         | `backend/src/app/tools/kernel.py`                      | `ToolKernel` — registers plugins, runs middleware, dispatches `execute_tool()`                                                          |
+| Tool plugin         | `backend/src/app/tools/plugin.py`                      | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                      |
+| Tools               | `backend/src/app/tools/plugins/`                       | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`           |
+| Personal finance    | `backend/src/app/tools/plugins/personal_finance/`      | 9 tools for credit cards, loans, income, expenses, reports, transfers; `db.py` owns async PostgreSQL pool and schema migrations         |
+| Upload              | `backend/src/app/upload/storage_service.py`            | Presigned S3 URL generation                                                                                                            |
+| Frontend            | `frontend/src/`                                        | React + Vite + Tailwind chat UI with SSE consumer                                                                                      |
+| Infrastructure      | `infra/`                                               | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                        |
 
 ---
 
@@ -64,12 +70,12 @@ The system is a full-stack chat application built around a LangGraph agent that 
 
 ### 2.1 Session Manager Owns the Truncation Policy
 
-Every tool is wrapped by `make_session_tool()` (`tools/base.py`). After a tool's runner produces its raw string payload, it unconditionally calls `record_tool_result` in `session/manager.py` before returning anything to the agent.
+Every tool result passes through `ResultProcessor.process()` in `tools/services/result.py`. The kernel dispatches calls through middleware (logging, error handling) before reaching the plugin, then pipes results through the processor.
 
-The decision tree in `record_tool_result`:
+The decision tree:
 
 ```
-payload tokens ≤ inline_limit (1 500)  → return full payload inline + store it
+payload tokens ≤ inline_limit (4 000)  → return full payload inline + store it
 payload tokens > inline_limit           → summarize via sub-agent + store it
 ```
 
@@ -91,6 +97,26 @@ For inline results, `result` is added to the envelope. For oversized results, on
 ### 2.2 `recall` Is an Explicit Agent Tool
 
 The agent is not automatically given full payloads — it must issue a `recall(handle)` tool call. This prevents accidental context bloat: the agent reasons from the summary and only recalls when summary is insufficient. The system prompt instructs the agent on this contract explicitly.
+
+### 2.9 Command Node
+
+A `commands_node` is the graph entry point (replacing a direct edge from `START` to `cache_lookup` or `agent`). It inspects the last user message for slash commands:
+
+| Command | Behavior |
+| ------- | -------- |
+| `/login <user_id>` | Rewrites the message to `read_memory` with the given user ID, routes to `agent` |
+| `/tools` | Rewrites the message to "Show me tools", routes to `agent` |
+| _(anything else)_ | Routes to `cache_lookup` if cache is enabled, otherwise `agent` |
+
+This keeps command handling declarative and out of the LLM.
+
+### 2.10 Personal Finance Plugin Suite
+
+Nine tools under the `personal_finance.*` namespace handle budgeting and liability tracking. They share an async `asyncpg` connection pool in `tools/plugins/personal_finance/db.py` that auto-runs `CREATE TABLE IF NOT EXISTS` migrations on first acquisition. Data is stored in PostgreSQL (a separate `postgres` service in Docker Compose), independent of Redis.
+
+Tables: `credit_cards`, `loans`, `income`, `expenses`, `pending_conflicts`, `savings_transfers`.
+
+All tools are scoped by `user_id`, which the agent derives from a prior `/login` call or from memory. Duplicate-entry conflicts are written to `pending_conflicts` rather than silently overwriting existing records, and `list_conflicts` surfaces them for user resolution.
 
 ### 2.3 Map-Reduce Summarization Sub-Agent
 
@@ -149,6 +175,7 @@ The `/chat` endpoint returns an `EventSourceResponse`. The backend yields typed 
 | `tool_call`       | `{id, name, args}` — agent issued a tool call                 |
 | `tool_result`     | `{tool_call_id, content}` — tool result metadata envelope     |
 | `message`         | `{role, content, source}` — final assistant message           |
+| `usage`           | `{estimated_tokens, input_tokens, output_tokens}` — token usage after each agent turn |
 | `done`            | `{}` — stream complete                                        |
 
 The frontend assembles these events into the chat item list in `App.tsx`.
@@ -157,11 +184,13 @@ The frontend assembles these events into the chat item list in `App.tsx`.
 
 ## 3. Trade-offs
 
-### 3.1 Redis as Single Store: Simplicity vs. Durability and Scale
+### 3.1 Redis + PostgreSQL: Two Backing Stores
 
-**Benefit:** Zero additional infrastructure for local dev; a single connection pool; easy to inspect with `redis-cli`.
+**Redis** holds all transient and conversation-scoped data: sessions, tool-result payloads, LangGraph checkpoints, the semantic cache, and long-term memory.
 
-**Cost:** Redis is an in-memory store. Unbounded payload accumulation causes OOM. There are no TTLs on `payload:{handle}` keys. Deleting a session leaks payload keys (the `delete_session` path removes the session hash and records set, but not the payload keys — a known bug). A single Redis instance is also a single point of failure.
+**PostgreSQL** holds personal finance data (credit cards, loans, income, expenses, savings transfers). This data is structured and relational, making a proper SQL database a better fit than Redis hashes.
+
+**Cost of Redis:** It is an in-memory store. Unbounded payload accumulation causes OOM. There are no TTLs on `payload:{handle}` keys. Deleting a session leaks payload keys (the `delete_session` path removes the session hash and records set, but not the payload keys — a known bug). A single Redis instance is also a single point of failure.
 
 **Alternative not taken:** DynamoDB + S3 (the infrastructure modules reference this). It would give durable, scalable storage but adds operational complexity and cost for a development prototype.
 
