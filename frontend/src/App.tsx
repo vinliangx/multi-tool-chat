@@ -298,6 +298,16 @@ export function App() {
     }
   };
 
+  const clearCache = () => {
+    setConfirm({
+      message: "Clear the semantic cache? All cached responses will be removed.",
+      onConfirm: () => {
+        setConfirm(null);
+        fetch(`/cache`, { method: "DELETE" });
+      },
+    });
+  };
+
   const newSession = () => {
     withConfirm(
       "Start a new session? Your current operation will be cancelled.",
@@ -340,7 +350,7 @@ export function App() {
         />
       )}
       <aside>
-        <Header newSession={newSession} />
+        <Header newSession={newSession} clearCache={clearCache} />
 
         <NavSideBar
           activeSessionId={activeSessionId}

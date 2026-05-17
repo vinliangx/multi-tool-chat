@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import (
+    cache,
     delete_session_checkpoints,
     get_session_messages,
     run_agent_stream,
@@ -27,6 +28,13 @@ class ChatRequest(BaseModel):
 
 @router.get("/health")
 async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.delete("/cache")
+async def clear_cache() -> dict[str, str]:
+    if cache is not None:
+        cache.clear()
     return {"status": "ok"}
 
 
