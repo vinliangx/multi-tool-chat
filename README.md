@@ -5,14 +5,14 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
 ## Architecture
 
 ```
-┌────────────┐  SSE  ┌─────────────────────────────┐
-│ React/Vite │──────▶│ FastAPI + LangGraph          │
-└────────────┘       │  ┌──────────────┐            │
-                     │  │CommandsNode  │            │
-                     │  │ /login /tools│            │
-                     │  └──────┬───────┘            │
-                     │         ▼                    │
-                     │  ┌──────────────┐            │
+┌────────────┐  SSE  ┌───────────────────────────────┐
+│ React/Vite │──────▶│ FastAPI + LangGraph           │
+└────────────┘       │  ┌──────────────┐             │
+                     │  │CommandsNode  │             │
+                     │  │ /login /tools│             │
+                     │  └──────┬───────┘             │
+                     │         ▼                     │
+                     │  ┌──────────────┐             │
                      │  │SemanticCache │◀──────────┐ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
@@ -32,7 +32,7 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  recall      │           │ │
                      │  │  save_memory │           │ │
                      │  │  read_memory │           │ │
-                     │  │  personal_finance.*       │ │
+                     │  │  personal_finance.*      │ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
                      │  ┌──────────────┐           │ │
@@ -134,6 +134,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 **Apple Silicon note** — Ollama in Docker on macOS runs CPU-only (no Metal passthrough). For faster inference, install Ollama natively (`brew install ollama && ollama serve`) and set `OLLAMA_BASE_URL=http://host.docker.internal:11434` in `.env`.
 
 **Tool-calling reliability with local models** — small models occasionally miss tool calls or emit malformed args. Ranked best to worst for this app:
+
 1. `qwen2.5:7b` (default — solid tool calling)
 2. `llama3.1:8b`
 3. `mistral-nemo`
@@ -191,49 +192,49 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 
 ## Required env (backend)
 
-| Variable | Purpose |
-| --- | --- |
-| `LLM_PROVIDER` | `anthropic` (default) or `ollama` |
-| `ANTHROPIC_API_KEY` | LLM access when `LLM_PROVIDER=anthropic` |
-| `MODEL_NAME` | Override main LLM (default: `claude-sonnet-4-6`) |
-| `SUMMARIZER_MODEL` | Override summarizer (default: `claude-haiku-4-5-20251001`) |
-| `OLLAMA_BASE_URL` | Ollama server URL (default: `http://localhost:11434`) |
-| `OLLAMA_MODEL` | Ollama chat model (default: `qwen2.5:7b`) |
-| `OLLAMA_SUMMARIZER_MODEL` | Ollama summarizer model |
-| `OLLAMA_EMBEDDING_MODEL` | Ollama embedding model for semantic cache (default: `embeddinggemma`) |
-| `OLLAMA_VISION_MODEL` | Ollama vision model (default: `qwen3-vl:latest`) |
-| `REDIS_URL` | Redis connection string (default: `redis://localhost:6379`) |
-| `POSTGRES_URL` | PostgreSQL connection string for personal finance data (default: `postgresql://finance_user:finance_password@localhost:5432/finance_db`) |
-| `POSTGRES_PASSWORD` | PostgreSQL password (used by Docker Compose, default: `finance_password`) |
-| `EXTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the browser (presigned URLs) |
-| `INTERNAL_S3_ENDPOINT_URL` | S3 endpoint reachable from the backend container |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials |
-| `BUCKET_NAME` | S3 bucket for file uploads |
-| `USE_AWS_STORE` | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis) |
+| Variable                                     | Purpose                                                                                                                                  |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                               | `anthropic` (default) or `ollama`                                                                                                        |
+| `ANTHROPIC_API_KEY`                          | LLM access when `LLM_PROVIDER=anthropic`                                                                                                 |
+| `MODEL_NAME`                                 | Override main LLM (default: `claude-sonnet-4-6`)                                                                                         |
+| `SUMMARIZER_MODEL`                           | Override summarizer (default: `claude-haiku-4-5-20251001`)                                                                               |
+| `OLLAMA_BASE_URL`                            | Ollama server URL (default: `http://localhost:11434`)                                                                                    |
+| `OLLAMA_MODEL`                               | Ollama chat model (default: `qwen2.5:7b`)                                                                                                |
+| `OLLAMA_SUMMARIZER_MODEL`                    | Ollama summarizer model                                                                                                                  |
+| `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)                                                                    |
+| `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                                                                         |
+| `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                                                                              |
+| `POSTGRES_URL`                               | PostgreSQL connection string for personal finance data (default: `postgresql://finance_user:finance_password@localhost:5432/finance_db`) |
+| `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `finance_password`)                                                                |
+| `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                                                                                  |
+| `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                                                                         |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                                                                           |
+| `BUCKET_NAME`                                | S3 bucket for file uploads                                                                                                               |
+| `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)                                                                   |
 
 ## Tool reference
 
-| Tool | Description |
-| --- | --- |
-| `http_fetch` | Fetch a URL and return the response body |
-| `csv_s3` | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans |
-| `image_read` | Read an image from S3 and analyze it with the vision LLM; OCR supported |
-| `sql_query` | Run a SELECT query against the local SQLite DB |
-| `sql_ddl` | Run CREATE / DROP / ALTER TABLE statements |
-| `sql_dml` | Run INSERT / UPDATE / DELETE statements |
-| `weather` | Get current weather for a location |
-| `recall` | Retrieve a full tool-result payload by handle |
-| `save_memory` | Persist user facts, likes, and dislikes across sessions |
-| `read_memory` | Read stored user facts, likes, and dislikes |
-| `personal_finance.add_credit_card` | Register a credit card with limit, APR, and billing dates |
-| `personal_finance.add_loan` | Register a loan with balance, APR, and payment schedule |
-| `personal_finance.add_income` | Record an income entry (one-time or recurring) |
-| `personal_finance.add_expense` | Record an expense with category and date |
-| `personal_finance.get_report` | Generate a monthly financial summary: burn rate and daily budget |
-| `personal_finance.list_conflicts` | List pending duplicate-entry conflicts awaiting resolution |
-| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance |
-| `personal_finance.payment_to_loan` | Record a payment made toward a loan balance |
-| `personal_finance.transferred_to_savings` | Record a transfer to savings |
+| Tool                                      | Description                                                                             |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| `http_fetch`                              | Fetch a URL and return the response body                                                |
+| `csv_s3`                                  | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans |
+| `image_read`                              | Read an image from S3 and analyze it with the vision LLM; OCR supported                 |
+| `sql_query`                               | Run a SELECT query against the local SQLite DB                                          |
+| `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                              |
+| `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                 |
+| `weather`                                 | Get current weather for a location                                                      |
+| `recall`                                  | Retrieve a full tool-result payload by handle                                           |
+| `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                 |
+| `read_memory`                             | Read stored user facts, likes, and dislikes                                             |
+| `personal_finance.add_credit_card`        | Register a credit card with limit, APR, and billing dates                               |
+| `personal_finance.add_loan`               | Register a loan with balance, APR, and payment schedule                                 |
+| `personal_finance.add_income`             | Record an income entry (one-time or recurring)                                          |
+| `personal_finance.add_expense`            | Record an expense with category and date                                                |
+| `personal_finance.get_report`             | Generate a monthly financial summary: burn rate and daily budget                        |
+| `personal_finance.list_conflicts`         | List pending duplicate-entry conflicts awaiting resolution                              |
+| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                      |
+| `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                             |
+| `personal_finance.transferred_to_savings` | Record a transfer to savings                                                            |
 
 ## Frontend features
 
