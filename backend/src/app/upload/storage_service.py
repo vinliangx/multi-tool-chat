@@ -22,14 +22,17 @@ def get_upload_url(req: UploadRequest):
         region_name=settings.region_name,
         config=Config(signature_version="s3v4"),
     )
-    url = s3.generate_presigned_url(
-        ClientMethod="put_object",
-        Params={
-            "Bucket": settings.bucket_name,
-            "Key": key,
-            "ContentType": req.file_type,
-        },
-        ExpiresIn=60,
-    )
+    try:
+        url = s3.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={
+                "Bucket": settings.bucket_name,
+                "Key": key,
+                "ContentType": req.file_type,
+            },
+            ExpiresIn=60,
+        )
+    finally:
+        s3.close()
 
     return {"url": url, "key": key}

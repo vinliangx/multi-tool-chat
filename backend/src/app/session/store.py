@@ -68,7 +68,7 @@ class RedisSessionStore:
 
     async def get_payload(self, handle: str) -> str | None:
         payload = await self._redis.get(f"payload:{handle}")
-        return payload.decode()
+        return payload.decode() if payload else None
 
     async def get_record(self, handle: str) -> ToolResultRecord | None:
         data = await self._redis.hget("handles", handle)

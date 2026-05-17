@@ -43,9 +43,16 @@ class ImageS3Plugin(ToolPlugin):
             region_name=settings.region_name,
             config=Config(signature_version="s3v4"),
         )
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        mime_type = obj["ContentType"]
-        object_content = obj["Body"].read()
+        try:
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            content_length = obj.get("ContentLength", 0)
+            max_size = 20 * 1024 * 1024  # 20 MB
+            if content_length > max_size:
+                return f"Error: image too large ({content_length / (1024 * 1024):.1f} MB, max 20 MB)."
+            mime_type = obj["ContentType"]
+            object_content = obj["Body"].read()
+        finally:
+            s3.close()
         encoded_string = base64.b64encode(object_content).decode("utf-8")
         result = await vision(prompt=prompt, mime=mime_type, data=encoded_string)
         return f"Image Result: {result}"

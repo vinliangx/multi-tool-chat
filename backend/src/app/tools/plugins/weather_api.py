@@ -32,12 +32,17 @@ class WeatherPlugin(ToolPlugin):
         transport = StreamableHttpTransport(
             url=f"{_WEATHER_SERVICE_URL}/mcp",
         )
-        async with Client(transport) as client:
-            result = await client.call_tool(
-                "get_weather",
-                {"latitude": kwargs["latitude"], "longitude": kwargs["longitude"]},
-            )
-        data = json.loads(result.content[-1].text)
+        try:
+            async with Client(transport) as client:
+                result = await client.call_tool(
+                    "get_weather",
+                    {"latitude": kwargs["latitude"], "longitude": kwargs["longitude"]},
+                )
+            if not result.content:
+                return "Error: weather service returned empty response"
+            data = json.loads(result.content[-1].text)
+        except Exception as e:
+            return f"Error fetching weather: {e}"
         return (
             f"Current temperature: {data['current_temperature_c']}°C, "
             f"wind speed: {data['current_wind_speed_kmh']} km/h\n"

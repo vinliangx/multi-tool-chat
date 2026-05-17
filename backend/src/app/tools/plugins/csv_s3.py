@@ -44,6 +44,9 @@ class CsvS3Plugin(ToolPlugin):
         filter_column = kwargs.get("filter_column")
         filter_value = kwargs.get("filter_value")
 
+        if max_rows > 500:
+            return "Error: 500 lines is the max request"
+
         if not source.startswith("s3://"):
             return "Error: source must start with s3://"
 
@@ -58,7 +61,10 @@ class CsvS3Plugin(ToolPlugin):
             region_name=settings.region_name,
             config=Config(signature_version="s3v4"),
         )
-        body = s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
+        try:
+            body = s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
+        finally:
+            s3.close()
 
         reader = csv.DictReader(io.StringIO(body))
         fieldnames = reader.fieldnames or []
@@ -81,7 +87,7 @@ class CsvS3Plugin(ToolPlugin):
         for row in reader:
             total_rows += 1
             if filtering:
-                if needle in row[filter_column].lower():
+                if needle in row.get(filter_column, "").lower():
                     matched_rows.append(row)
             else:
                 if len(unfiltered_rows) < max_rows:

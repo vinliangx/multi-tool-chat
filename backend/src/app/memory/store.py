@@ -11,4 +11,5 @@ class MemoryStore:
         return cls._instance
 
     def __init__(self):
-        self.redis = redis.from_url(settings.redis_url)
+        if not hasattr(self, "redis"):
+            self.redis = redis.from_url(settings.redis_url)

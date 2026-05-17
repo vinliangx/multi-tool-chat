@@ -1,3 +1,5 @@
+import json
+
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
@@ -31,7 +33,5 @@ class ReadMemoryPlugin(ToolPlugin):
             else None
         )
         if data is not None:
-            import json
-
             return json.dumps(data)
         return "{}"

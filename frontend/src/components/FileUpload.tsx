@@ -30,7 +30,7 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
     const files = e.target.files;
     if (!files) return;
     setIsUploading(true);
-    const uoloadedFiles: FileUploadItem[] = [];
+    const uploadedFiles: FileUploadItem[] = [];
     try {
       for (let index = 0; index < files.length; index++) {
         const file = files.item(index);
@@ -53,17 +53,15 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
           },
           body: file,
         });
-        uoloadedFiles.push({
+        uploadedFiles.push({
           name: file.name,
           url: `s3://file-uploads/${key}`,
         });
       }
     } finally {
-      setTimeout(() => {
-        setIsOpen(false);
-        setIsUploading(false);
-        filesUploaded(uoloadedFiles);
-      }, 2000);
+      setIsOpen(false);
+      setIsUploading(false);
+      filesUploaded(uploadedFiles);
     }
   }
   return (

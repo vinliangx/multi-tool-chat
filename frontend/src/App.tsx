@@ -87,7 +87,7 @@ export function App() {
 
   const send = useCallback(async () => {
     const textMessages: string[] = [input.trim()];
-    if (!textMessages || busy) return;
+    if (!input.trim() || busy) return;
     if (files && files.length > 0) {
       textMessages.push(
         "\n\nAttached Files: " + files.map((f) => `**${f.name}**`).join(","),
@@ -100,7 +100,7 @@ export function App() {
     setMessages((m) => [...m, textMessages.join("\n")]);
     setItems((xs) => [
       ...xs,
-      { kind: "user", text: textMessages.join("\n"), files: files },
+      { kind: "user", text: textMessages.join("\n") },
     ]);
     setInput("");
     setFiles([]);
@@ -248,7 +248,11 @@ export function App() {
             else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
           }
           if (dataStr && evt) {
-            handleEvent(evt, JSON.parse(dataStr));
+            try {
+              handleEvent(evt, JSON.parse(dataStr));
+            } catch {
+              console.error("Failed to parse SSE event data:", dataStr);
+            }
             dataStr = "";
           }
         }
@@ -303,7 +307,7 @@ export function App() {
       message: "Clear the semantic cache? All cached responses will be removed.",
       onConfirm: () => {
         setConfirm(null);
-        fetch(`/cache`, { method: "DELETE" });
+        fetch(`/cache`, { method: "DELETE" }).catch(() => {});
       },
     });
   };
@@ -324,7 +328,9 @@ export function App() {
   };
 
   const deleteSession = (session_id: string) => {
-    fetch(`/sessions?session_id=${session_id}`, { method: "DELETE" });
+    fetch(`/sessions?session_id=${session_id}`, { method: "DELETE" })
+      .then(loadSessions)
+      .catch(loadSessions);
     if (activeSessionId == session_id) {
       abortRef.current?.abort();
       setBusy(false);
@@ -332,7 +338,6 @@ export function App() {
       setItems([]);
       setMessages([]);
     }
-    loadSessions();
   };
 
   const inputRef = useRef<HTMLTextAreaElement>(null);

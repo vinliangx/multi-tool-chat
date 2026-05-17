@@ -52,7 +52,7 @@ async def record_tool_result(
             payload,
             tool_name=tool_name,
             tool_args=tool_args,
-            target_tokens=512,
+            target_tokens=4000,
         )
 
     record = ToolResultRecord(

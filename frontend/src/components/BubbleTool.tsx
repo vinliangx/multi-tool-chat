@@ -31,7 +31,7 @@ export default function BubbleTool({
             Using tool [<span className="highlight">{name}</span>]
           </div>
           {summarizeProgress && !result && (
-            <div className="ml-auto align-middle font-bold text-gray-200">
+            <div className="ml-auto py-1.5 align-middle font-bold text-gray-200">
               Chunks {summarizeProgress?.current ?? 0}/
               {summarizeProgress?.total ?? 0}
               <FontAwesomeIcon icon={faSpinner} spin className="ml-2" />
