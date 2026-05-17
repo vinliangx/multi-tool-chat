@@ -31,7 +31,7 @@ main {
 }
 
 .bottom-ref {
-  @apply h-35;
+  @apply h-40;
 }
 
 .chat-new-button {
@@ -52,10 +52,14 @@ main {
     @apply mx-2 w-[calc(100%-1rem)] rounded-xl bg-slate-900 p-3;
     @apply sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
     @apply flex;
+
+    .chat-box-container {
+      @apply flex h-fit w-full gap-4;
+    }
     .chat-input-values {
-      @apply flex h-full w-full flex-col items-center justify-center;
+      @apply flex h-full w-full flex-col items-start justify-start;
       .chat-input {
-        @apply w-full flex-2;
+        @apply min-h-20 w-full flex-2;
         @apply field-sizing-content resize-none overflow-auto rounded-md bg-gray-300 px-3 py-2;
         @apply text-[85%] text-gray-900;
         @apply focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5 sm:text-[90%];
@@ -67,6 +71,12 @@ main {
       .file-item {
         @apply mb-2 rounded-xs bg-amber-300 px-2 text-[80%] font-bold text-black;
       }
+    }
+    .chat-box-send {
+      @apply rounded-xl bg-linear-120;
+      @apply from-blue-800 to-blue-600 px-4 py-2 text-sm text-blue-100 shadow-lg shadow-blue-900;
+      @apply hover:from-blue-700 hover:to-blue-500 disabled:opacity-50;
+      @apply max-h-40 self-center;
     }
   }
 

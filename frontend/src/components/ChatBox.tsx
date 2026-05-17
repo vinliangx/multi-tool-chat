@@ -98,7 +98,7 @@ export function ChatBox({
         </div>
       </div>
       <div className="chat-box">
-        <div className="flex h-20 w-full gap-4">
+        <div className="chat-box-container">
           <FileUpload filesUploaded={filesUploaded} />
           <div className="chat-input-values">
             {files.length > 0 && (
@@ -137,7 +137,7 @@ export function ChatBox({
           <button
             onClick={send}
             disabled={busy || !input?.trim()}
-            className="rounded-xl bg-linear-120 from-blue-800 to-blue-600 px-4 py-2 text-sm text-blue-100 shadow-lg shadow-blue-900 hover:from-blue-700 hover:to-blue-500 disabled:opacity-50"
+            className="chat-box-send"
           >
             <FontAwesomeIcon icon={faPaperPlane} className="pr-2" />
             SEND

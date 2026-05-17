@@ -32,6 +32,7 @@ from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langgraph.types import Command
 from redisvl.extensions.cache.llm import SemanticCache
 
 from app.agent.llm import build_chat_llm
@@ -69,7 +70,8 @@ _VECTORIZER = build_vectorizer_llm()  # None when provider has no embedding API
 
 _SYSTEM = SystemMessage(
     content=(
-        "You are a helpful and very enthusiastic assistant with access to tools. "
+        "You are a helpful and polite assistant with access to tools. "
+        "You explain things briefly and to the point."
         "Tool results are returned as JSON metadata: {handle, tool, summary, ...}. "
         "If the summary is enough, answer from it. "
         "If you need the full raw output, call the `recall` tool with the handle. "
@@ -195,16 +197,44 @@ def _route_after_cache(state: AgentState):
     return "agent"
 
 
+def _command_node(
+    state: AgentState,
+) -> Command[Literal["agent", "cache_lookup"]]:
+    user_input = state["messages"][-1].content
+    if user_input.startswith("/login"):
+        user_id = user_input.replace("/login", "")
+        return Command(
+            goto="agent",
+            update={
+                "messages": [
+                    HumanMessage(
+                        content=f"Use 'read_memory' to identify user_id: '{user_id}'"
+                    )
+                ]
+            },
+        )
+    if user_input.startswith("/tools"):
+        return Command(
+            goto="agent",
+            update={"messages": [HumanMessage(content="Show me tools")]},
+        )
+    if cache is not None:
+        return Command(goto="cache_lookup")
+    return Command(goto="agent")
+
+
 def _build_graph(checkpointer: BaseCheckpointSaver):
     g = StateGraph(AgentState)
     g.add_node("agent", _agent_node)
+    g.add_node("commands_node", _command_node)
     g.add_node("tools", ToolNode(_TOOLS))
     g.add_edge("tools", "agent")
+    g.add_edge(START, "commands_node")
 
     if cache is not None:
         g.add_node("cache_lookup", _cache_lookup_node)
         g.add_node("cache_store", _cache_store_node)
-        g.add_edge(START, "cache_lookup")
+
         g.add_conditional_edges(
             "cache_lookup", _route_after_cache, {END: END, "agent": "agent"}
         )
@@ -215,7 +245,7 @@ def _build_graph(checkpointer: BaseCheckpointSaver):
         )
         g.add_edge("cache_store", END)
     else:
-        g.add_edge(START, "agent")
+        # g.add_edge(START, "agent")
         g.add_conditional_edges(
             "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
         )
@@ -292,7 +322,9 @@ async def run_agent_stream(
         try:
             with _kernel.bind_context(session_id):
                 async for stream_type, event in graph.astream(
-                    initial, stream_mode=["updates", "messages"], config=config
+                    initial,
+                    stream_mode=["updates", "messages"],
+                    config=config,
                 ):
                     await event_queue.put(("graph", stream_type, event))
         except Exception as exc:
