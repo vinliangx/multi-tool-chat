@@ -51,9 +51,9 @@ This is a full-stack AI chat app: **React/Vite frontend** → **FastAPI backend*
 1. Frontend POSTs to `/chat` and consumes the SSE stream
 2. `api/routes.py` creates/reuses a session and calls `run_agent_stream()`
 3. `kernel.bind_context(session_id)` sets the `ContextVar` so all plugins see the current session
-4. The LangGraph graph in `agent/graph.py` loops: Agent node (LLM) → Tool node → back to Agent until done
+4. The LangGraph graph in `agent/graph.py`: cache_lookup (Ollama only) → Agent node (LLM) → Tool node → back to Agent until done; responses are stored in cache_store after the final agent turn
 5. Each tool call dispatches through `ToolKernel.execute_tool()`: middleware → plugin → `ResultProcessor`
-6. Events stream back: `session`, `token`, `tool_call`, `tool_result`, `chunk_progress`, `done`
+6. Events stream back: `session`, `token`, `reasoning_token`, `tool_call`, `tool_result`, `message`, `usage`, `done`
 
 ### Tool truncation policy (critical pattern)
 

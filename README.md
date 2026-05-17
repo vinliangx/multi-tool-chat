@@ -8,11 +8,6 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
 ┌────────────┐  SSE  ┌───────────────────────────────┐
 │ React/Vite │──────▶│ FastAPI + LangGraph           │
 └────────────┘       │  ┌──────────────┐             │
-                     │  │CommandsNode  │             │
-                     │  │ /login /tools│             │
-                     │  └──────┬───────┘             │
-                     │         ▼                     │
-                     │  ┌──────────────┐             │
                      │  │SemanticCache │◀──────────┐ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
@@ -74,7 +69,6 @@ Key design choices:
 - **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis.
 - **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
-- **Command node.** A `commands_node` at graph entry intercepts slash commands before routing to the agent or cache. `/login <user_id>` triggers a `read_memory` lookup; `/tools` asks the agent to list available tools. All other input routes normally.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
 - **MCP microservice tool.** The `weather_lookup` plugin delegates to an external `mcp_weather_service` built with **FastMCP** (port 8002) rather than calling open-meteo directly. The plugin uses `fastmcp.client.Client` with `StreamableHttpTransport` to invoke the `get_weather` MCP tool at `/mcp`; the service handles geocoding and returns current temperature, wind speed, and an hourly temperature forecast. It demonstrates how `ToolPlugin` subclasses can speak the MCP protocol to remote services rather than implementing logic locally; the service is included in Docker Compose and reachable via `WEATHER_SERVICE_URL`.
 
@@ -256,6 +250,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 - **Context usage badge** — shows estimated token usage vs. the context window limit, updated after each turn.
 - **File upload** — attach CSV or image files via presigned S3 URL; the agent reads CSVs with `csv_s3` and images with `image_read`.
 - **Summarization progress** — tool bubbles display a live chunk counter (`chunk N / total`) while the summarizer is running, with a cancel button to abort the in-flight request.
+- **Clear cache button** — a button fixed at the bottom of the sidebar calls `DELETE /cache` to flush the semantic cache (no-op when the cache is disabled).
 - **Message history** — up/down arrow (without Shift) cycles through sent messages.
 
 ## Known Issues
