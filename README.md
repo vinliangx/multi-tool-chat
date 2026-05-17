@@ -28,7 +28,7 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  sql_query   │           │ │
                      │  │  sql_ddl     │           │ │
                      │  │  sql_dml     │           │ │
-                     │  │  weather     │           │ │
+                     │  │  weather_lookup           │ │
                      │  │  recall      │           │ │
                      │  │  save_memory │           │ │
                      │  │  read_memory │           │ │
@@ -59,7 +59,7 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                            └────────────┘
 
                            ┌──────────────────────┐
-                           │ MCP Weather Service  │  (weather tool → POST /weather)
+                           │ MCP Weather Service  │  (weather_lookup → FastMCP /mcp)
                            └──────────────────────┘
 ```
 
@@ -76,7 +76,7 @@ Key design choices:
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 - **Command node.** A `commands_node` at graph entry intercepts slash commands before routing to the agent or cache. `/login <user_id>` triggers a `read_memory` lookup; `/tools` asks the agent to list available tools. All other input routes normally.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
-- **MCP microservice tool.** The `weather` plugin delegates to an external `mcp_weather_service` FastAPI microservice (port 8002) rather than calling open-meteo directly. It demonstrates how `ToolPlugin` subclasses can call remote HTTP services rather than implementing logic locally; the service is included in Docker Compose and reachable via `WEATHER_SERVICE_URL`.
+- **MCP microservice tool.** The `weather_lookup` plugin delegates to an external `mcp_weather_service` built with **FastMCP** (port 8002) rather than calling open-meteo directly. The plugin uses `fastmcp.client.Client` with `StreamableHttpTransport` to invoke the `get_weather` MCP tool at `/mcp`; the service handles geocoding and returns current temperature, wind speed, and an hourly temperature forecast. It demonstrates how `ToolPlugin` subclasses can speak the MCP protocol to remote services rather than implementing logic locally; the service is included in Docker Compose and reachable via `WEATHER_SERVICE_URL`.
 
 ## Layout
 
@@ -108,7 +108,7 @@ frontend/       React + Vite + TS chat UI
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 services/
-  mcp_weather_service/  Standalone FastAPI microservice exposing POST /weather
+  mcp_weather_service/  Standalone FastMCP microservice exposing get_weather MCP tool at /mcp
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -233,7 +233,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `sql_query`                               | Run a SELECT query against the local SQLite DB                                          |
 | `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                              |
 | `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                 |
-| `weather`                                 | Get current weather for a location via the MCP weather microservice                     |
+| `weather_lookup`                          | Get current weather + hourly temperature forecast for a lat/lon via the FastMCP weather microservice |
 | `recall`                                  | Retrieve a full tool-result payload by handle                                           |
 | `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                 |
 | `read_memory`                             | Read stored user facts, likes, and dislikes                                             |

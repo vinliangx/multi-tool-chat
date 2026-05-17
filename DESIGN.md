@@ -60,7 +60,7 @@ The system is a full-stack chat application built around a LangGraph agent that 
 | Tool plugin         | `backend/src/app/tools/plugin.py`                      | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                      |
 | Tools               | `backend/src/app/tools/plugins/`                       | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`           |
 | Personal finance    | `backend/src/app/tools/plugins/personal_finance/`      | 9 tools for credit cards, loans, income, expenses, reports, transfers; `db.py` owns async PostgreSQL pool and schema migrations          |
-| MCP weather service | `services/mcp_weather_service/`                        | Standalone FastAPI microservice (port 8002) exposing `POST /weather`; called by `WeatherPlugin`                                         |
+| MCP weather service | `services/mcp_weather_service/`                        | Standalone FastMCP microservice (port 8002) exposing a `get_weather` MCP tool at `/mcp`; called by `WeatherPlugin` via `fastmcp.client.Client` |
 | Upload              | `backend/src/app/upload/storage_service.py`            | Presigned S3 URL generation                                                                                                             |
 | Frontend            | `frontend/src/`                                        | React + Vite + Tailwind chat UI with SSE consumer                                                                                      |
 | Infrastructure      | `infra/`                                               | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                        |
@@ -113,9 +113,11 @@ This keeps command handling declarative and out of the LLM.
 
 ### 2.11 MCP Microservice Tool
 
-`WeatherPlugin` (`tools/plugins/weather_api.py`) delegates to an external `mcp_weather_service` FastAPI microservice (port 8002) rather than calling open-meteo directly. The plugin issues a `POST /weather` request and returns structured temperature and wind data to the agent.
+`WeatherPlugin` (`tools/plugins/weather_api.py`) delegates to an external `mcp_weather_service` built with **FastMCP** (port 8002) rather than calling open-meteo directly. The plugin uses `fastmcp.client.Client` with `StreamableHttpTransport` to invoke the `get_weather` MCP tool at `{WEATHER_SERVICE_URL}/mcp`. The service returns current temperature, wind speed, and an hourly temperature forecast, which the plugin formats into a plain text string for the agent.
 
-This pattern shows how the `ToolPlugin` ABC is provider-agnostic: a plugin can call a local library, a database, or a remote service — the kernel, middleware, and `ResultProcessor` remain unchanged. `WEATHER_SERVICE_URL` configures the endpoint; Docker Compose starts the service and wires it into the backend's environment automatically.
+The `mcp_weather_service` is itself a minimal FastMCP app (`main.py`) that registers a single `@mcp.tool` and runs in streamable-HTTP transport mode (`mcp.run(transport="streamable-http", ...)`). It has no FastAPI dependency — only `fastmcp` and `httpx`.
+
+This pattern shows how the `ToolPlugin` ABC is provider-agnostic: a plugin can call a local library, a database, a plain REST service, or an MCP server — the kernel, middleware, and `ResultProcessor` remain unchanged. `WEATHER_SERVICE_URL` configures the endpoint; Docker Compose starts the service and wires it into the backend's environment automatically.
 
 ### 2.10 Personal Finance Plugin Suite
 
