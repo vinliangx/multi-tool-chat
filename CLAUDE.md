@@ -102,6 +102,16 @@ class MyPlugin(ToolPlugin):
 
 Register the instance in `tools/plugins/__init__.py` by appending it to `ALL_PLUGINS`. The `ToolKernel` automatically runs results through `ResultProcessor` (truncation/summarization) unless `skip_result_processing = True`.
 
+### RAG pipeline
+
+Three tools delegate to `mcp_documents` (port 8003), a standalone FastMCP microservice:
+
+- **`rag_upload(s3_url)`** — inserts a document record in PostgreSQL and pushes `doc_id` onto the Redis ingestion queue. Supported formats: txt, pdf, docx, pptx, xlsx, images.
+- **`rag_search(query, top_k)`** — embeds the query via Ollama, runs a cosine-similarity pgvector query, returns ranked chunks with presigned S3 links.
+- **`rag_queue_status()`** — returns documents in `pending` or `processing` state.
+
+Each plugin calls the corresponding MCP tool at `{RAG_SERVICE_URL}/mcp` using `fastmcp.client.Client`. A background worker in `services/mcp_documents/worker.py` dequeues jobs, chunks, embeds, and stores vectors in PostgreSQL. `RAG_SERVICE_URL` defaults to `http://localhost:8003`.
+
 ### Redis as single backing store
 
 - Session metadata + message history
@@ -109,6 +119,7 @@ Register the instance in `tools/plugins/__init__.py` by appending it to `ALL_PLU
 - LangGraph checkpoints
 - Semantic cache (Ollama only — disabled for Anthropic)
 - Long-term memory (`save_memory`/`read_memory`)
+- RAG ingestion queue (`rag:queue` list, managed by `mcp_documents`)
 
 `USE_AWS_STORE=1` switches sessions/payloads to DynamoDB+S3.
 
@@ -128,6 +139,7 @@ The Vite dev proxy forwards `/chat`, `/sessions`, `/health`, `/upload_url`, `/co
 | `SUMMARIZER_MODEL`  | Summarizer LLM (default: `claude-haiku-4-5-20251001`) |
 | `REDIS_URL`         | Redis connection (default: `redis://localhost:6379`)  |
 | `OLLAMA_BASE_URL`   | Ollama server URL                                     |
+| `RAG_SERVICE_URL`   | MCP documents / RAG service (default: `http://localhost:8003`) |
 
 Full list in README.md.
 
@@ -138,4 +150,5 @@ Full list in README.md.
 - **Summarizer** defaults to Haiku/small Ollama model for cost efficiency; it runs as a sub-agent, not within the main LangGraph graph.
 - **Tool execution context** is threaded via `ContextVar` (`_current_context` / `_current_session`). Plugins access the current session and services through `ToolContext`, set by `kernel.bind_context()` before each request.
 - **Cycle detection** — `ToolKernel` tracks in-flight tools per-request via a `ContextVar[frozenset]`; re-entering the same tool raises `ToolCycleError`.
+- **LLM instance caching** — `agent/llm.py` caches `ChatAnthropic`/`ChatOllama` instances keyed by `(model, max_tokens, reasoning)`; instances are reused across requests rather than reconstructed each time.
 - Tests use `monkeypatch` to replace `summarize()` and a `reset_store` fixture to clear in-memory state between tests.
