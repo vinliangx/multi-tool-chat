@@ -8,11 +8,10 @@ import uuid
 from pathlib import Path
 
 import boto3
-import httpx
-from botocore.client import Config
-
 import db
+import httpx
 import rag_queue
+from botocore.client import Config
 from chunker import chunk_text
 from config import settings
 
@@ -26,9 +25,12 @@ _EXCEL_EXTS = {".xlsx", ".xls"}
 _TEXT_EXTS = {".txt", ".md", ".csv", ".json", ".xml", ".html"}
 
 _EXT_MIME = {
-    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".png": "image/png", ".gif": "image/gif",
-    ".webp": "image/webp", ".bmp": "image/bmp",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
 }
 
 
@@ -56,16 +58,19 @@ def _extract_text(data: bytes, ext: str) -> str:
 
     if ext in _PDF_EXTS:
         import fitz
+
         doc = fitz.open(stream=data, filetype="pdf")
         return "\n".join(page.get_text() for page in doc)
 
     if ext in _WORD_EXTS:
         from docx import Document
+
         doc = Document(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
     if ext in _PPTX_EXTS:
         from pptx import Presentation
+
         prs = Presentation(io.BytesIO(data))
         parts: list[str] = []
         for slide in prs.slides:
@@ -76,6 +81,7 @@ def _extract_text(data: bytes, ext: str) -> str:
 
     if ext in _EXCEL_EXTS:
         import openpyxl
+
         wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
         rows: list[str] = []
         for sheet in wb.worksheets:
@@ -95,17 +101,27 @@ async def _describe_image(data: bytes, ext: str) -> str:
 
     if settings.vision_provider == "anthropic":
         import anthropic
+
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         msg = await client.messages.create(
             model=settings.vision_model,
             max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": mime,
+                                "data": b64,
+                            },
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ],
         )
         return msg.content[0].text
     else:
@@ -124,13 +140,15 @@ async def _describe_image(data: bytes, ext: str) -> str:
 
 async def _embed(texts: list[str]) -> list[list[float]]:
     async with httpx.AsyncClient(timeout=120) as client:
-        results = await asyncio.gather(*[
-            client.post(
-                f"{settings.ollama_base_url}/api/embeddings",
-                json={"model": settings.embedding_model, "prompt": text},
-            )
-            for text in texts
-        ])
+        results = await asyncio.gather(
+            *[
+                client.post(
+                    f"{settings.ollama_base_url}/api/embeddings",
+                    json={"model": settings.embedding_model, "prompt": text},
+                )
+                for text in texts
+            ]
+        )
     for r in results:
         r.raise_for_status()
     return [r.json()["embedding"] for r in results]

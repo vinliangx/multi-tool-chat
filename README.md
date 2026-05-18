@@ -23,11 +23,14 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  sql_query   │           │ │
                      │  │  sql_ddl     │           │ │
                      │  │  sql_dml     │           │ │
-                     │  │  weather_lookup           │ │
+                     │  │  weather_lookup          │ │
                      │  │  recall      │           │ │
                      │  │  save_memory │           │ │
                      │  │  read_memory │           │ │
                      │  │  personal_finance.*      │ │
+                     │  │  rag_upload  │           │ │
+                     │  │  rag_search  │           │ │
+                     │  │  rag_queue_status        │ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
                      │  ┌──────────────┐           │ │
@@ -50,11 +53,17 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                            └────────────┘
 
                            ┌────────────┐
-                           │ PostgreSQL │  (personal finance data)
+                           │ PostgreSQL │  (personal finance data,
+                           │            │   RAG document chunks)
                            └────────────┘
 
                            ┌──────────────────────┐
                            │ MCP Weather Service  │  (weather_lookup → FastMCP /mcp)
+                           └──────────────────────┘
+
+                           ┌──────────────────────┐
+                           │ MCP Documents Service│  (rag_* tools → FastMCP /mcp)
+                           │ (chunking + pgvector)│
                            └──────────────────────┘
 ```
 
@@ -70,7 +79,9 @@ Key design choices:
 - **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
-- **MCP microservice tool.** The `weather_lookup` plugin delegates to an external `mcp_weather_service` built with **FastMCP** (port 8002) rather than calling open-meteo directly. The plugin uses `fastmcp.client.Client` with `StreamableHttpTransport` to invoke the `get_weather` MCP tool at `/mcp`; the service handles geocoding and returns current temperature, wind speed, and an hourly temperature forecast. It demonstrates how `ToolPlugin` subclasses can speak the MCP protocol to remote services rather than implementing logic locally; the service is included in Docker Compose and reachable via `WEATHER_SERVICE_URL`.
+- **MCP microservice tools.** Two standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, and a Redis-backed ingestion queue. Both are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
+- **RAG pipeline.** `rag_upload` queues an S3 document (txt, pdf, docx, pptx, xlsx, images) for async chunking and embedding by `mcp_documents`. A background worker embeds chunks via Ollama and stores them in PostgreSQL with pgvector. `rag_search` runs a cosine-similarity query over stored chunks and returns ranked results with temporary presigned S3 links. `rag_queue_status` shows the ingestion queue.
+- **LLM instance caching.** `agent/llm.py` caches `ChatAnthropic` / `ChatOllama` instances keyed by `(model, max_tokens, reasoning)`, avoiding re-construction on every request.
 
 ## Layout
 
@@ -86,7 +97,8 @@ backend/        Python (FastAPI + LangGraph), Pants targets
       middleware.py LoggingMiddleware, ErrorHandlingMiddleware
       plugins/      One file per tool (http_fetch, csv_s3, image_s3,
                     sql_query, sql_ddl, sql_dml, weather_api,
-                    recall, save_memory, read_memory)
+                    recall, save_memory, read_memory,
+                    rag_upload, rag_search, rag_status)
                     personal_finance/ (add_credit_card, add_loan,
                     add_income, add_expense, get_report,
                     list_conflicts, payment_to_credit_card,
@@ -103,6 +115,9 @@ frontend/       React + Vite + TS chat UI
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 services/
   mcp_weather_service/  Standalone FastMCP microservice exposing get_weather MCP tool at /mcp
+  mcp_documents/        Standalone FastMCP microservice for RAG: chunking, pgvector storage,
+                        Redis ingestion queue, async worker; exposes rag_upload,
+                        rag_search, rag_queue_status MCP tools at /mcp
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -216,30 +231,34 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `BUCKET_NAME`                                | S3 bucket for file uploads                                                                                                               |
 | `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)                                                                   |
 | `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)                                                                  |
+| `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)                                                          |
 
 ## Tool reference
 
-| Tool                                      | Description                                                                             |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `http_fetch`                              | Fetch a URL and return the response body                                                |
-| `csv_s3`                                  | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans |
-| `image_read`                              | Read an image from S3 and analyze it with the vision LLM; OCR supported                 |
-| `sql_query`                               | Run a SELECT query against the local SQLite DB                                          |
-| `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                              |
-| `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                 |
+| Tool                                      | Description                                                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `http_fetch`                              | Fetch a URL and return the response body                                                             |
+| `csv_s3`                                  | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans              |
+| `image_read`                              | Read an image from S3 and analyze it with the vision LLM; OCR supported                              |
+| `sql_query`                               | Run a SELECT query against the local SQLite DB                                                       |
+| `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                                           |
+| `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                              |
 | `weather_lookup`                          | Get current weather + hourly temperature forecast for a lat/lon via the FastMCP weather microservice |
-| `recall`                                  | Retrieve a full tool-result payload by handle                                           |
-| `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                 |
-| `read_memory`                             | Read stored user facts, likes, and dislikes                                             |
-| `personal_finance.add_credit_card`        | Register a credit card with limit, APR, and billing dates                               |
-| `personal_finance.add_loan`               | Register a loan with balance, APR, and payment schedule                                 |
-| `personal_finance.add_income`             | Record an income entry (one-time or recurring)                                          |
-| `personal_finance.add_expense`            | Record an expense with category and date                                                |
-| `personal_finance.get_report`             | Generate a monthly financial summary: burn rate and daily budget                        |
-| `personal_finance.list_conflicts`         | List pending duplicate-entry conflicts awaiting resolution                              |
-| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                      |
-| `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                             |
-| `personal_finance.transferred_to_savings` | Record a transfer to savings                                                            |
+| `recall`                                  | Retrieve a full tool-result payload by handle                                                        |
+| `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                              |
+| `read_memory`                             | Read stored user facts, likes, and dislikes                                                          |
+| `personal_finance.add_credit_card`        | Register a credit card with limit, APR, and billing dates                                            |
+| `personal_finance.add_loan`               | Register a loan with balance, APR, and payment schedule                                              |
+| `personal_finance.add_income`             | Record an income entry (one-time or recurring)                                                       |
+| `personal_finance.add_expense`            | Record an expense with category and date                                                             |
+| `personal_finance.get_report`             | Generate a monthly financial summary: burn rate and daily budget                                     |
+| `personal_finance.list_conflicts`         | List pending duplicate-entry conflicts awaiting resolution                                           |
+| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                                   |
+| `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                                          |
+| `personal_finance.transferred_to_savings` | Record a transfer to savings                                                                         |
+| `rag_upload`                              | Queue an S3 document (txt, pdf, docx, pptx, xlsx, images) for chunking and RAG indexing              |
+| `rag_search`                              | Semantic search over RAG-indexed documents; returns ranked chunks with presigned S3 links            |
+| `rag_queue_status`                        | Show the ordered list of documents pending or being processed by the RAG pipeline                    |
 
 ## Frontend features
 
@@ -248,7 +267,8 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 - **Reasoning bubbles** — extended thinking tokens are surfaced in a collapsible bubble; a global checkbox in the chat bar keeps all reasoning bubbles expanded or collapsed.
 - **Cache badge** — assistant messages show whether the response came from the LLM or the semantic cache (Ollama only).
 - **Context usage badge** — shows estimated token usage vs. the context window limit, updated after each turn.
-- **File upload** — attach CSV or image files via presigned S3 URL; the agent reads CSVs with `csv_s3` and images with `image_read`.
+- **File upload** — attach CSV, image, or PDF files via presigned S3 URL; the agent reads CSVs with `csv_s3`, images with `image_read`, and can queue PDFs and other documents for RAG indexing with `rag_upload`.
+- **External link rendering** — URLs in assistant messages open in a new tab via `rehype-external-links`.
 - **Summarization progress** — tool bubbles display a live chunk counter (`chunk N / total`) while the summarizer is running, with a cancel button to abort the in-flight request.
 - **Clear cache button** — a button fixed at the bottom of the sidebar calls `DELETE /cache` to flush the semantic cache (no-op when the cache is disabled).
 - **Message history** — up/down arrow (without Shift) cycles through sent messages.

@@ -14,10 +14,6 @@ The system is a full-stack chat application built around a LangGraph agent that 
                                        │  │  START                          │  │
                                        │  │    │                            │  │
                                        │  │    ▼                            │  │
-                                       │  │  commands_node                  │  │
-                                       │  │  (/login /tools or passthrough) │  │
-                                       │  │    │                            │  │
-                                       │  │    ▼                            │  │
                                        │  │  cache_lookup ──hit──▶ END      │  │
                                        │  │    │ miss                       │  │
                                        │  │    ▼                            │  │
@@ -41,29 +37,32 @@ The system is a full-stack chat application built around a LangGraph agent that 
                   sessions · tool results        file uploads        personal finance
                   LangGraph checkpoints          CSV reads via       (credit_cards,
                   semantic cache                 csv_s3              loans, income,
-                  long-term memory store                             expenses, etc.)
+                  RAG ingestion queue            PDF/doc uploads     expenses, etc.)
+                  long-term memory store         for rag_upload      RAG doc chunks
+                                                                     (pgvector)
 ```
 
 ### Component Map
 
-| Layer               | Path                                                   | Responsibility                                                                                                                         |
-| ------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP API            | `backend/src/app/api/routes.py`                        | SSE chat stream, session CRUD, presigned upload URL                                                                                    |
-| Agent graph         | `backend/src/app/agent/graph.py`                       | LangGraph state machine, command node, cache nodes, streaming                                                                          |
-| LLM factory         | `backend/src/app/agent/llm.py`                         | Anthropic / Ollama abstraction                                                                                                         |
-| Summarizer          | `backend/src/app/agent/summarizer.py`                  | Map-reduce sub-agent for oversized tool output                                                                                         |
-| Vectorizer          | `backend/src/app/agent/vectorizer.py`                  | Embedding model for semantic cache                                                                                                     |
-| Session manager     | `backend/src/app/session/manager.py`                   | Truncation policy; persists and sizes every tool result                                                                                |
-| Session store       | `backend/src/app/session/store.py`                     | `RedisSessionStore` — sessions, payloads, records                                                                                      |
-| Models              | `backend/src/app/session/models.py`                    | `ToolResultRecord`, `SessionRecord`                                                                                                    |
-| Tool kernel         | `backend/src/app/tools/kernel.py`                      | `ToolKernel` — registers plugins, runs middleware, dispatches `execute_tool()`                                                          |
-| Tool plugin         | `backend/src/app/tools/plugin.py`                      | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                      |
-| Tools               | `backend/src/app/tools/plugins/`                       | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`           |
-| Personal finance    | `backend/src/app/tools/plugins/personal_finance/`      | 9 tools for credit cards, loans, income, expenses, reports, transfers; `db.py` owns async PostgreSQL pool and schema migrations          |
-| MCP weather service | `services/mcp_weather_service/`                        | Standalone FastMCP microservice (port 8002) exposing a `get_weather` MCP tool at `/mcp`; called by `WeatherPlugin` via `fastmcp.client.Client` |
-| Upload              | `backend/src/app/upload/storage_service.py`            | Presigned S3 URL generation                                                                                                             |
-| Frontend            | `frontend/src/`                                        | React + Vite + Tailwind chat UI with SSE consumer                                                                                      |
-| Infrastructure      | `infra/`                                               | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                        |
+| Layer                 | Path                                              | Responsibility                                                                                                                                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP API              | `backend/src/app/api/routes.py`                   | SSE chat stream, session CRUD, presigned upload URL                                                                                                                                                                                                                                                        |
+| Agent graph           | `backend/src/app/agent/graph.py`                  | LangGraph state machine, command node, cache nodes, streaming                                                                                                                                                                                                                                              |
+| LLM factory           | `backend/src/app/agent/llm.py`                    | Anthropic / Ollama abstraction                                                                                                                                                                                                                                                                             |
+| Summarizer            | `backend/src/app/agent/summarizer.py`             | Map-reduce sub-agent for oversized tool output                                                                                                                                                                                                                                                             |
+| Vectorizer            | `backend/src/app/agent/vectorizer.py`             | Embedding model for semantic cache                                                                                                                                                                                                                                                                         |
+| Session manager       | `backend/src/app/session/manager.py`              | Truncation policy; persists and sizes every tool result                                                                                                                                                                                                                                                    |
+| Session store         | `backend/src/app/session/store.py`                | `RedisSessionStore` — sessions, payloads, records                                                                                                                                                                                                                                                          |
+| Models                | `backend/src/app/session/models.py`               | `ToolResultRecord`, `SessionRecord`                                                                                                                                                                                                                                                                        |
+| Tool kernel           | `backend/src/app/tools/kernel.py`                 | `ToolKernel` — registers plugins, runs middleware, dispatches `execute_tool()`                                                                                                                                                                                                                             |
+| Tool plugin           | `backend/src/app/tools/plugin.py`                 | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                                                                                                                                                                                          |
+| Tools                 | `backend/src/app/tools/plugins/`                  | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`, `rag_upload`, `rag_search`, `rag_status`                                                                                                                                     |
+| Personal finance      | `backend/src/app/tools/plugins/personal_finance/` | 9 tools for credit cards, loans, income, expenses, reports, transfers; `db.py` owns async PostgreSQL pool and schema migrations                                                                                                                                                                            |
+| MCP weather service   | `services/mcp_weather_service/`                   | Standalone FastMCP microservice (port 8002) exposing a `get_weather` MCP tool at `/mcp`; called by `WeatherPlugin` via `fastmcp.client.Client`                                                                                                                                                             |
+| MCP documents service | `services/mcp_documents/`                         | Standalone FastMCP microservice (port 8003) for RAG: `main.py` exposes `rag_upload`, `rag_search`, `rag_queue_status` MCP tools; `worker.py` is an async loop that chunks and embeds documents via Ollama and stores vectors in PostgreSQL with pgvector; `rag_queue.py` manages the Redis ingestion queue |
+| Upload                | `backend/src/app/upload/storage_service.py`       | Presigned S3 URL generation                                                                                                                                                                                                                                                                                |
+| Frontend              | `frontend/src/`                                   | React + Vite + Tailwind chat UI with SSE consumer                                                                                                                                                                                                                                                          |
+| Infrastructure        | `infra/`                                          | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                                                                                                                                                                                            |
 
 ---
 
@@ -99,25 +98,28 @@ For inline results, `result` is added to the envelope. For oversized results, on
 
 The agent is not automatically given full payloads — it must issue a `recall(handle)` tool call. This prevents accidental context bloat: the agent reasons from the summary and only recalls when summary is insufficient. The system prompt instructs the agent on this contract explicitly.
 
-### 2.9 Command Node
+### 2.9 RAG Pipeline (mcp_documents microservice)
 
-A `commands_node` is the graph entry point (replacing a direct edge from `START` to `cache_lookup` or `agent`). It inspects the last user message for slash commands:
+Three tools — `rag_upload`, `rag_search`, `rag_queue_status` — delegate to `mcp_documents` (port 8003), a standalone FastMCP service. The pipeline is:
 
-| Command | Behavior |
-| ------- | -------- |
-| `/login <user_id>` | Rewrites the message to `read_memory` with the given user ID, routes to `agent` |
-| `/tools` | Rewrites the message to "Show me tools", routes to `agent` |
-| _(anything else)_ | Routes to `cache_lookup` if cache is enabled, otherwise `agent` |
+1. **Ingest** — `rag_upload(s3_url)` inserts a document record in PostgreSQL and pushes the `doc_id` onto a Redis list (`rag:queue`). Returns `job_id` and queue position.
+2. **Process** — A background `worker_loop()` dequeues jobs, downloads the file from S3, splits it into overlapping text chunks (`chunk_size=1000`, `overlap=200`), embeds each chunk via `POST /api/embed` (Ollama), and writes chunk rows with a `vector(768)` column to a pgvector table.
+3. **Search** — `rag_search(query, top_k)` embeds the query with the same Ollama endpoint, runs a cosine-similarity `ORDER BY embedding <=> $1 LIMIT $2` query, and returns ranked chunks with temporary presigned S3 download links for the source documents.
+4. **Status** — `rag_queue_status()` returns all documents in `pending` or `processing` state.
 
-This keeps command handling declarative and out of the LLM.
+Supported file types: txt, pdf, docx, pptx, xlsx, and images (via the vision model configured in `mcp_documents`). The service is included in Docker Compose and depends on PostgreSQL and Redis. `RAG_SERVICE_URL` configures the endpoint (default `http://localhost:8003`).
 
-### 2.11 MCP Microservice Tool
+Interrupted jobs (status = `processing` at startup) are automatically re-queued via `requeue_interrupted()` in the lifespan handler.
 
-`WeatherPlugin` (`tools/plugins/weather_api.py`) delegates to an external `mcp_weather_service` built with **FastMCP** (port 8002) rather than calling open-meteo directly. The plugin uses `fastmcp.client.Client` with `StreamableHttpTransport` to invoke the `get_weather` MCP tool at `{WEATHER_SERVICE_URL}/mcp`. The service returns current temperature, wind speed, and an hourly temperature forecast, which the plugin formats into a plain text string for the agent.
+### 2.11 MCP Microservice Tools
 
-The `mcp_weather_service` is itself a minimal FastMCP app (`main.py`) that registers a single `@mcp.tool` and runs in streamable-HTTP transport mode (`mcp.run(transport="streamable-http", ...)`). It has no FastAPI dependency — only `fastmcp` and `httpx`.
+Two standalone FastMCP services extend the tool set via the MCP protocol. Each is called by a `ToolPlugin` subclass using `fastmcp.client.Client` with `StreamableHttpTransport`, so the kernel, middleware, and `ResultProcessor` remain unchanged.
 
-This pattern shows how the `ToolPlugin` ABC is provider-agnostic: a plugin can call a local library, a database, a plain REST service, or an MCP server — the kernel, middleware, and `ResultProcessor` remain unchanged. `WEATHER_SERVICE_URL` configures the endpoint; Docker Compose starts the service and wires it into the backend's environment automatically.
+**`mcp_weather_service`** (port 8002) — `WeatherPlugin` invokes the `get_weather` MCP tool at `{WEATHER_SERVICE_URL}/mcp`. The service handles geocoding (via open-meteo) and returns current temperature, wind speed, and an hourly forecast. It is a minimal FastMCP app with no FastAPI dependency — only `fastmcp` and `httpx`.
+
+**`mcp_documents`** (port 8003) — `RagUploadPlugin`, `RagSearchPlugin`, and `RagStatusPlugin` invoke `rag_upload`, `rag_search`, and `rag_queue_status` MCP tools at `{RAG_SERVICE_URL}/mcp`. The service manages the full RAG pipeline (see §2.9). Its `main.py` registers the MCP tools and runs a background worker task via a lifespan handler.
+
+This pattern demonstrates that `ToolPlugin` subclasses are provider-agnostic: a plugin can call a local library, a database, a plain REST service, or an MCP server. Docker Compose starts both services and wires `WEATHER_SERVICE_URL` and `RAG_SERVICE_URL` into the backend environment automatically.
 
 ### 2.10 Personal Finance Plugin Suite
 
@@ -140,15 +142,16 @@ A cheaper/faster model (`claude-haiku-4-5` or `qwen2.5:7b`) is used for both map
 
 All state flows through one Redis instance:
 
-| Key pattern                  | Contents                                                 |
-| ---------------------------- | -------------------------------------------------------- |
-| `session` (hash)             | Session metadata records                                 |
-| `records:{session_id}` (set) | Handles belonging to a session                           |
-| `handles` (hash)             | `ToolResultRecord` JSON keyed by handle                  |
-| `payload:{handle}`           | Raw tool output string                                   |
-| LangGraph namespace          | Checkpoint data (managed by `AsyncRedisSaver`)           |
-| `llm_cache`                  | Semantic cache vectors (managed by `redisvl`)            |
-| Memory namespace             | Long-term user facts (managed by LangGraph `RedisStore`) |
+| Key pattern                  | Contents                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `session` (hash)             | Session metadata records                                                              |
+| `records:{session_id}` (set) | Handles belonging to a session                                                        |
+| `handles` (hash)             | `ToolResultRecord` JSON keyed by handle                                               |
+| `payload:{handle}`           | Raw tool output string                                                                |
+| LangGraph namespace          | Checkpoint data (managed by `AsyncRedisSaver`)                                        |
+| `llm_cache`                  | Semantic cache vectors (managed by `redisvl`)                                         |
+| Memory namespace             | Long-term user facts (managed by LangGraph `RedisStore`)                              |
+| `rag:queue` (list)           | RAG ingestion queue — `doc_id` UUIDs awaiting processing (managed by `mcp_documents`) |
 
 Choosing Redis as the single store simplifies local development (one `docker compose up`) and eliminates the DynamoDB/S3 dependency that the original infrastructure modules reference. The `USE_AWS_STORE` flag in config preserves the option to switch.
 
@@ -176,16 +179,16 @@ The LangGraph graph runs asynchronously, and tool factories receive a `session_i
 
 The `/chat` endpoint returns an `EventSourceResponse`. The backend yields typed events:
 
-| Event type        | Payload                                                       |
-| ----------------- | ------------------------------------------------------------- |
-| `session`         | `{session_id}` — first event, establishes or confirms session |
-| `token`           | `{content}` — incremental assistant text chunk                |
-| `reasoning_token` | `{content}` — model reasoning/thinking text                   |
-| `tool_call`       | `{id, name, args}` — agent issued a tool call                 |
-| `tool_result`     | `{tool_call_id, content}` — tool result metadata envelope     |
-| `message`         | `{role, content, source}` — final assistant message           |
+| Event type        | Payload                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `session`         | `{session_id}` — first event, establishes or confirms session                         |
+| `token`           | `{content}` — incremental assistant text chunk                                        |
+| `reasoning_token` | `{content}` — model reasoning/thinking text                                           |
+| `tool_call`       | `{id, name, args}` — agent issued a tool call                                         |
+| `tool_result`     | `{tool_call_id, content}` — tool result metadata envelope                             |
+| `message`         | `{role, content, source}` — final assistant message                                   |
 | `usage`           | `{estimated_tokens, input_tokens, output_tokens}` — token usage after each agent turn |
-| `done`            | `{}` — stream complete                                        |
+| `done`            | `{}` — stream complete                                                                |
 
 The frontend assembles these events into the chat item list in `App.tsx`.
 
@@ -195,9 +198,9 @@ The frontend assembles these events into the chat item list in `App.tsx`.
 
 ### 3.1 Redis + PostgreSQL: Two Backing Stores
 
-**Redis** holds all transient and conversation-scoped data: sessions, tool-result payloads, LangGraph checkpoints, the semantic cache, and long-term memory.
+**Redis** holds all transient and conversation-scoped data: sessions, tool-result payloads, LangGraph checkpoints, the semantic cache, long-term memory, and the RAG ingestion queue (`rag:queue`).
 
-**PostgreSQL** holds personal finance data (credit cards, loans, income, expenses, savings transfers). This data is structured and relational, making a proper SQL database a better fit than Redis hashes.
+**PostgreSQL** holds two datasets: personal finance data (credit cards, loans, income, expenses, savings transfers) and RAG document chunks with pgvector embeddings. Both are structured and relational, making a proper SQL database a better fit than Redis hashes.
 
 **Cost of Redis:** It is an in-memory store. Unbounded payload accumulation causes OOM. There are no TTLs on `payload:{handle}` keys. Deleting a session leaks payload keys (the `delete_session` path removes the session hash and records set, but not the payload keys — a known bug). A single Redis instance is also a single point of failure.
 
