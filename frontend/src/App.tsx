@@ -98,10 +98,7 @@ export function App() {
     abortRef.current = controller;
 
     setMessages((m) => [...m, textMessages.join("\n")]);
-    setItems((xs) => [
-      ...xs,
-      { kind: "user", text: textMessages.join("\n") },
-    ]);
+    setItems((xs) => [...xs, { kind: "user", text: textMessages.join("\n") }]);
     setInput("");
     setFiles([]);
     setContextUsage(null);
@@ -304,7 +301,8 @@ export function App() {
 
   const clearCache = () => {
     setConfirm({
-      message: "Clear the semantic cache? All cached responses will be removed.",
+      message:
+        "Clear the semantic cache? All cached responses will be removed.",
       onConfirm: () => {
         setConfirm(null);
         fetch(`/cache`, { method: "DELETE" }).catch(() => {});
@@ -445,6 +443,7 @@ export function App() {
             isNew={items.length == 0}
             reasoningExpanded={keepReasoningExpanded}
             setReasoningExpanded={setKeepReasoningExpanded}
+            setBusy={setBusy}
           />
         </div>
       </main>

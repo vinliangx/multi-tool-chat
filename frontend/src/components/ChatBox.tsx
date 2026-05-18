@@ -21,6 +21,7 @@ export type ChatBoxArgs = {
   sessionId?: string | null;
   reasoningExpanded: boolean;
   setReasoningExpanded: (expanded: boolean) => void;
+  setBusy: (val: boolean) => void;
 };
 
 export function ChatBox({
@@ -36,6 +37,7 @@ export function ChatBox({
   sessionId,
   reasoningExpanded,
   setReasoningExpanded,
+  setBusy,
 }: ChatBoxArgs) {
   let messageIndex = useRef(messages.length);
 
@@ -99,7 +101,7 @@ export function ChatBox({
       </div>
       <div className="chat-box">
         <div className="chat-box-container">
-          <FileUpload filesUploaded={filesUploaded} />
+          <FileUpload filesUploaded={filesUploaded} setBusy={setBusy} />
           <div className="chat-input-values">
             {files.length > 0 && (
               <div className="files-selected">

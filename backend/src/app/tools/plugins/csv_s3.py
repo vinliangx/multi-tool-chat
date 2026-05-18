@@ -12,7 +12,7 @@ from app.tools.plugin import ToolContext, ToolPlugin
 class CsvReadArgs(BaseModel):
     source: str = Field(..., description="Reads an s3://bucket/key URL")
     max_rows: int = Field(
-        500, description="Cap on rows to return when no filter is applied"
+        200, description="Cap on rows to return when no filter is applied, max is 200"
     )
     filter_column: str | None = Field(None, description="Column name to filter on")
     filter_value: str | None = Field(
@@ -40,12 +40,12 @@ class CsvS3Plugin(ToolPlugin):
 
     async def execute(self, context: ToolContext, **kwargs) -> str:
         source = kwargs["source"]
-        max_rows = kwargs.get("max_rows", 500)
+        max_rows = kwargs.get("max_rows", 100)
         filter_column = kwargs.get("filter_column")
         filter_value = kwargs.get("filter_value")
 
-        if max_rows > 500:
-            return "Error: 500 lines is the max request"
+        if max_rows > 200:
+            return "Error: 200 lines is the max request"
 
         if not source.startswith("s3://"):
             return "Error: source must start with s3://"

@@ -6,9 +6,10 @@ import { ThreeDot } from "react-loading-indicators";
 export type FileUploadItem = { name: string; url: string };
 export type FileUploadArgs = {
   filesUploaded: (urls: FileUploadItem[]) => void;
+  setBusy: (val: boolean) => void;
 };
 
-export default function FileUpload({ filesUploaded }: FileUploadArgs) {
+export default function FileUpload({ filesUploaded, setBusy }: FileUploadArgs) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -30,6 +31,7 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
     const files = e.target.files;
     if (!files) return;
     setIsUploading(true);
+    setBusy(true);
     const uploadedFiles: FileUploadItem[] = [];
     try {
       for (let index = 0; index < files.length; index++) {
@@ -59,6 +61,7 @@ export default function FileUpload({ filesUploaded }: FileUploadArgs) {
         });
       }
     } finally {
+      setBusy(false);
       setIsOpen(false);
       setIsUploading(false);
       filesUploaded(uploadedFiles);
