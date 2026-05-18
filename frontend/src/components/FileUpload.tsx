@@ -97,7 +97,7 @@ export default function FileUpload({ filesUploaded, setBusy }: FileUploadArgs) {
                 type="file"
                 onChange={handleFileChange}
                 multiple
-                accept=".csv,image/*"
+                accept=".csv,image/*,application/pdf"
                 style={{ display: "none" }}
               />
             </li>

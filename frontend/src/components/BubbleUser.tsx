@@ -1,4 +1,5 @@
 import MarkdownPreview from "react-markdown";
+import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
 
 export type BubbleUserArgs = { text: string; label: string };
@@ -9,7 +10,17 @@ export default function BubbleUser({ label, text }: BubbleUserArgs) {
       <div className="self-end text-[80%] text-blue-200">{label}</div>
       <div className="chat-user">
         <div className="chat-markdown-safe">
-          <MarkdownPreview remarkPlugins={[remarkGfm]}>{text}</MarkdownPreview>
+          <MarkdownPreview
+            rehypePlugins={[
+              [
+                rehypeExternalLinks,
+                { target: "_blank", rel: ["noopener", "noreferrer"] },
+              ],
+            ]}
+            remarkPlugins={[remarkGfm]}
+          >
+            {text}
+          </MarkdownPreview>
         </div>
       </div>
     </div>

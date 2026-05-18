@@ -1,4 +1,5 @@
 import MarkdownPreview from "react-markdown";
+import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
 
 export type BubbleAssistantArgs = { text: string; source: string };
@@ -10,7 +11,17 @@ export default function BubbleAssistant({ text, source }: BubbleAssistantArgs) {
       </div>
       <div className="chat-assistant">
         <div className="chat-markdown-safe">
-          <MarkdownPreview remarkPlugins={[remarkGfm]}>{text}</MarkdownPreview>
+          <MarkdownPreview
+            rehypePlugins={[
+              [
+                rehypeExternalLinks,
+                { target: "_blank", rel: ["noopener", "noreferrer"] },
+              ],
+            ]}
+            remarkPlugins={[remarkGfm]}
+          >
+            {text}
+          </MarkdownPreview>
         </div>
         <div className="pt mt-4 flex items-end pb-4 text-[75%]">
           <div className="flex-1 self-end text-right">Source:</div>

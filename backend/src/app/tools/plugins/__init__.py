@@ -23,6 +23,9 @@ from app.tools.plugins.save_memory import SaveMemoryPlugin
 from app.tools.plugins.sql_ddl import SqlDdlPlugin
 from app.tools.plugins.sql_dml import SqlDmlPlugin
 from app.tools.plugins.sql_query import SqlQueryPlugin
+from app.tools.plugins.rag_search import RagSearchPlugin
+from app.tools.plugins.rag_status import RagStatusPlugin
+from app.tools.plugins.rag_upload import RagUploadPlugin
 from app.tools.plugins.weather_api import WeatherPlugin
 
 ALL_PLUGINS: list[ToolPlugin] = [
@@ -45,4 +48,7 @@ ALL_PLUGINS: list[ToolPlugin] = [
     PaymentToCreditCardPlugin(),
     PaymentToLoanPlugin(),
     TransferredToSavingsPlugin(),
+    RagUploadPlugin(),
+    RagSearchPlugin(),
+    RagStatusPlugin(),
 ]

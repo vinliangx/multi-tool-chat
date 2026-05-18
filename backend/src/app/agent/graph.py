@@ -75,6 +75,7 @@ _SYSTEM = SystemMessage(
         "If the summary is enough, answer from it. "
         "If you need the full raw output, call the `recall` tool with the handle. "
         "Any destructive action requires confirmation, before calling any tool. "
+        "Show links that start with http:// or https:// as a markdown link with the name of the file always."
         "IMPORTANT: Always call `read_memory` before calling `save_memory` so you "
         "can merge existing facts, likes, and dislikes with any new information. "
         "Dont `save_memory` if nothing has change, compare before calling the tool."
