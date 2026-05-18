@@ -70,7 +70,7 @@ _VECTORIZER = build_vectorizer_llm()  # None when provider has no embedding API
 _SYSTEM = SystemMessage(
     content=(
         "You are a helpful and polite assistant with access to tools. "
-        "You explain things briefly and to the point."
+        "You explain things detailed without overwhelming the user."
         "Tool results are returned as JSON metadata: {handle, tool, summary, ...}. "
         "If the summary is enough, answer from it. "
         "If you need the full raw output, call the `recall` tool with the handle. "

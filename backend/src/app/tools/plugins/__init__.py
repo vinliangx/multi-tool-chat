@@ -23,6 +23,7 @@ from app.tools.plugins.save_memory import SaveMemoryPlugin
 from app.tools.plugins.sql_ddl import SqlDdlPlugin
 from app.tools.plugins.sql_dml import SqlDmlPlugin
 from app.tools.plugins.sql_query import SqlQueryPlugin
+from app.tools.plugins.doc_preview import DocPreviewPlugin
 from app.tools.plugins.rag_search import RagSearchPlugin
 from app.tools.plugins.rag_status import RagStatusPlugin
 from app.tools.plugins.rag_upload import RagUploadPlugin
@@ -51,4 +52,5 @@ ALL_PLUGINS: list[ToolPlugin] = [
     RagUploadPlugin(),
     RagSearchPlugin(),
     RagStatusPlugin(),
+    DocPreviewPlugin(),
 ]

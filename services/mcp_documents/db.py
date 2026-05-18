@@ -6,9 +6,8 @@ from typing import Any
 
 import asyncpg
 import numpy as np
-from pgvector.asyncpg import register_vector
-
 from config import settings
+from pgvector.asyncpg import register_vector
 
 _pool: asyncpg.Pool | None = None
 
@@ -16,6 +15,7 @@ _pool: asyncpg.Pool | None = None
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
+
         async def _init(conn: asyncpg.Connection) -> None:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             await register_vector(conn)
@@ -68,7 +68,9 @@ async def insert_document(doc_id: uuid.UUID, s3_url: str, filename: str) -> None
     async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO rag.documents (id, s3_url, filename, status) VALUES ($1, $2, $3, 'pending')",
-            doc_id, s3_url, filename,
+            doc_id,
+            s3_url,
+            filename,
         )
 
 
@@ -83,17 +85,22 @@ async def update_document_status(
         if status == "completed":
             await conn.execute(
                 "UPDATE rag.documents SET status=$1, completed_at=NOW(), chunk_count=$2 WHERE id=$3",
-                status, chunk_count, doc_id,
+                status,
+                chunk_count,
+                doc_id,
             )
         elif status == "failed":
             await conn.execute(
                 "UPDATE rag.documents SET status=$1, error=$2 WHERE id=$3",
-                status, error, doc_id,
+                status,
+                error,
+                doc_id,
             )
         else:
             await conn.execute(
                 "UPDATE rag.documents SET status=$1 WHERE id=$2",
-                status, doc_id,
+                status,
+                doc_id,
             )
 
 
@@ -117,7 +124,9 @@ async def insert_chunks(
             )
 
 
-async def search_chunks(query_embedding: list[float], top_k: int) -> list[dict[str, Any]]:
+async def search_chunks(
+    query_embedding: list[float], top_k: int
+) -> list[dict[str, Any]]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -156,7 +165,7 @@ async def get_queue_status() -> list[dict[str, Any]]:
             """
             SELECT id::text, s3_url, filename, status, created_at
             FROM rag.documents
-            WHERE status IN ('pending', 'processing')
+            WHERE status IN ('pending', 'processing','completed')
             ORDER BY created_at
             """
         )

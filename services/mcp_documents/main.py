@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import boto3
 import db
@@ -122,6 +123,66 @@ async def rag_search(query: str, top_k: int = 5) -> list[dict]:
             }
         )
     return output
+
+
+async def _summarize_text(text: str) -> str:
+    prompt = f"Summarize the following document in 2-3 sentences:\n\n{text[:8000]}"
+    if settings.vision_provider == "anthropic":
+        import anthropic
+
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        msg = await client.messages.create(
+            model=settings.vision_model,
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text
+    else:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json={"model": settings.vision_model, "prompt": prompt, "stream": False},
+            )
+            resp.raise_for_status()
+            return resp.json()["response"]
+
+
+@mcp.tool(name="doc_preview")
+async def doc_preview(s3_url: str) -> dict:
+    """Preview a document or image from S3: returns a raw text snippet and an LLM-generated summary without indexing."""
+    if not s3_url.startswith("s3://"):
+        return {"error": "s3_url must start with s3://"}
+
+    filename = s3_url.rstrip("/").split("/")[-1]
+    ext = Path(filename).suffix.lower()
+
+    try:
+        data = await asyncio.to_thread(worker._download, s3_url)
+    except Exception as e:
+        return {"error": f"Failed to download: {e}"}
+
+    try:
+        if ext in worker._IMAGE_EXTS:
+            description = await worker._describe_image(data, ext)
+            return {
+                "filename": filename,
+                "content_type": "image",
+                "snippet": description[:500],
+                "summary": description,
+            }
+        else:
+            text = worker._extract_text(data, ext)
+            if not text.strip():
+                return {"error": f"No text could be extracted from {filename}"}
+            summary = await _summarize_text(text)
+            return {
+                "filename": filename,
+                "content_type": "document",
+                "snippet": text[:500],
+                "summary": summary,
+            }
+    except Exception as e:
+        return {"error": f"Failed to process: {e}"}
 
 
 if __name__ == "__main__":
