@@ -5,6 +5,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 import boto3
 import db
@@ -57,7 +58,7 @@ def _presigned_url(s3_url: str, expiry: int = 3600) -> str:
     _, _, rest = s3_url.partition("s3://")
     bucket, _, key = rest.partition("/")
     return _s3_client().generate_presigned_url(
-        "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expiry
+        "get_object", Params={"Bucket": bucket, "Key": unquote(key)}, ExpiresIn=expiry
     )
 
 
@@ -102,7 +103,9 @@ async def rag_list(search_term: str | None = None, max_documents: int = 20) -> d
                 "s3_url": link,
                 "status": r["status"],
                 "created_at": r["created_at"].isoformat(),
-                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+                "completed_at": r["completed_at"].isoformat()
+                if r["completed_at"]
+                else None,
                 "chunk_count": r["chunk_count"],
                 "error": r["error"],
             }
