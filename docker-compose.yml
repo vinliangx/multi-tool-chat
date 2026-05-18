@@ -1,27 +1,4 @@
 services:
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama-data:/root/.ollama
-  #   healthcheck:
-  #     test: ["CMD", "ollama", "list"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 20
-
-  # ollama-pull:
-  #   image: ollama/ollama:latest
-  #   depends_on:
-  #     ollama:
-  #       condition: service_healthy
-  #   environment:
-  #     OLLAMA_HOST: http://ollama:11434
-  #   entrypoint: ["/bin/sh", "-c"]
-  #   command: ["ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"]
-  #   restart: "no"
-
   mcp_weather_service:
     build: ./services/mcp_weather_service
     develop:
@@ -50,7 +27,6 @@ services:
       - .env
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      # OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       OLLAMA_SUMMARIZER_MODEL: ${OLLAMA_SUMMARIZER_MODEL:-qwen2.5:7b}
@@ -77,9 +53,6 @@ services:
         condition: service_started
       mcp_documents:
         condition: service_started
-    # depends_on:
-    # ollama-pull:
-    # condition: service_completed_successfully
 
   redis:
     image: redis:alpine
@@ -109,13 +82,6 @@ services:
       INTERNAL_S3_ENDPOINT_URL: http://s3:9000
       EXTERNAL_S3_ENDPOINT_URL: http://localhost:9444
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      VISION_MODEL: ${VISION_MODEL}
-      VISION_PROVIDER: ${VISION_PROVIDER}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 15s

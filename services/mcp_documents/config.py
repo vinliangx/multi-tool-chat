@@ -9,15 +9,15 @@ class Settings(BaseSettings):
     )
     redis_url: str = "redis://localhost:6379"
 
-    internal_s3_endpoint_url: str = "http://localhost:9444"
+    internal_s3_endpoint_url: str = "http://s3:9000"
     external_s3_endpoint_url: str = "http://localhost:9444"
     aws_access_key_id: str = "ACCESS_KEY_ID"
     aws_secret_access_key: str = "ACCESS_KEY"
     region_name: str = "us-east-1"
     bucket_name: str = "file-uploads"
 
-    vision_model: str = "claude-sonnet-4-6"
-    vision_provider: str = "anthropic"
+    vision_model: str = "qwen3-vl:latest"
+    vision_provider: str = "ollama"
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
