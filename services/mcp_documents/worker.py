@@ -48,9 +48,7 @@ def _s3_client():
 def _download(s3_url: str) -> bytes:
     _, _, rest = s3_url.partition("s3://")
     bucket, _, key = rest.partition("/")
-    print(s3_url)
     obj = _s3_client().get_object(Bucket=bucket, Key=key)
-
     return obj["Body"].read()
 
 
