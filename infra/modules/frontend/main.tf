@@ -1,5 +1,5 @@
-variable "name"        { type = string }
-variable "api_domain"  { type = string }
+variable "name"       { type = string }
+variable "api_domain" { type = string }
 
 resource "aws_s3_bucket" "site" {
   bucket        = "${var.name}-frontend"
@@ -17,6 +17,23 @@ resource "aws_cloudfront_origin_access_control" "site" {
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
+}
+
+locals {
+  api_cache_behavior = {
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    forwarded_values = {
+      query_string = true
+      headers      = ["*"]
+      cookies      = { forward = "all" }
+    }
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
 }
 
 resource "aws_cloudfront_distribution" "site" {
@@ -55,8 +72,8 @@ resource "aws_cloudfront_distribution" "site" {
     path_pattern           = "/chat*"
     target_origin_id       = "api"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"]
-    cached_methods         = ["GET","HEAD"]
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
     forwarded_values {
       query_string = true
       headers      = ["*"]
@@ -71,8 +88,56 @@ resource "aws_cloudfront_distribution" "site" {
     path_pattern           = "/sessions*"
     target_origin_id       = "api"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET","HEAD","OPTIONS","POST","PUT","PATCH","DELETE"]
-    cached_methods         = ["GET","HEAD"]
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies { forward = "all" }
+    }
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/health*"
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies { forward = "all" }
+    }
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/upload_url*"
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies { forward = "all" }
+    }
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/config*"
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
     forwarded_values {
       query_string = true
       headers      = ["*"]
