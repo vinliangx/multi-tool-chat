@@ -28,7 +28,7 @@ _SYSTEM = (
     "Preserve concrete facts, numbers, identifiers, and any errors. "
     "You have to hold necessary information to answer counting questions."
     "Drop boilerplate. Be terse. The agent can request the full payload "
-    "Links list (with score next to it) with http:// or https:// after the summary."
+    "Links list (with score next to it) with http:// or https:// after the summary and keep uri path encoded for parsing."
     "later via a recall handle if it needs raw detail."
 )
 

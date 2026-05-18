@@ -158,6 +158,36 @@ async def get_pending_documents() -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
+async def get_all_documents(
+    search_term: str | None = None, limit: int = 21
+) -> list[dict[str, Any]]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if search_term:
+            rows = await conn.fetch(
+                """
+                SELECT id::text, s3_url, filename, status, created_at, completed_at, error, chunk_count
+                FROM rag.documents
+                WHERE filename ILIKE $1
+                ORDER BY created_at DESC
+                LIMIT $2
+                """,
+                f"%{search_term}%",
+                limit,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT id::text, s3_url, filename, status, created_at, completed_at, error, chunk_count
+                FROM rag.documents
+                ORDER BY created_at DESC
+                LIMIT $1
+                """,
+                limit,
+            )
+        return [dict(r) for r in rows]
+
+
 async def get_queue_status() -> list[dict[str, Any]]:
     pool = await get_pool()
     async with pool.acquire() as conn:

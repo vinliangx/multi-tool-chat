@@ -80,6 +80,36 @@ async def rag_upload(s3_url: str) -> dict:
     return {"job_id": str(doc_id), "filename": filename, "position_in_queue": position}
 
 
+@mcp.tool(name="rag_list")
+async def rag_list(search_term: str | None = None, max_documents: int = 20) -> dict:
+    """List documents in the RAG index. Optionally filter by filename and cap results.
+
+    Returns {documents, count, has_more}. If has_more is true, narrow with search_term or increase max_documents.
+    """
+    rows = await db.get_all_documents(search_term=search_term, limit=max_documents + 1)
+    has_more = len(rows) > max_documents
+    rows = rows[:max_documents]
+    output = []
+    for r in rows:
+        try:
+            link = _presigned_url(r["s3_url"])
+        except Exception:
+            link = r["s3_url"]
+        output.append(
+            {
+                "job_id": r["id"],
+                "filename": r["filename"],
+                "s3_url": link,
+                "status": r["status"],
+                "created_at": r["created_at"].isoformat(),
+                "completed_at": r["completed_at"].isoformat() if r["completed_at"] else None,
+                "chunk_count": r["chunk_count"],
+                "error": r["error"],
+            }
+        )
+    return {"documents": output, "count": len(output), "has_more": has_more}
+
+
 @mcp.tool(name="rag_queue_status")
 async def rag_queue_status() -> list[dict]:
     """Return the ordered list of documents pending or being processed."""
@@ -141,7 +171,11 @@ async def _summarize_text(text: str) -> str:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 f"{settings.ollama_base_url}/api/generate",
-                json={"model": settings.vision_model, "prompt": prompt, "stream": False},
+                json={
+                    "model": settings.vision_model,
+                    "prompt": prompt,
+                    "stream": False,
+                },
             )
             resp.raise_for_status()
             return resp.json()["response"]
