@@ -27,7 +27,7 @@ export default function BubbleAssistant({ text, source }: BubbleAssistantArgs) {
           <div className="flex-1 self-end text-right text-slate-800">
             Source:
           </div>
-          <div className="ml-2 flex rounded-2xl bg-gray-200 px-2 font-bold text-black">
+          <div className="ml-2 flex rounded-2xl bg-gray-300 px-2 font-bold text-black ring ring-black">
             {source}
           </div>
         </div>
