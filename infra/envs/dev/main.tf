@@ -47,8 +47,9 @@ module "frontend" {
   api_domain = module.compute.alb_dns_name
 }
 
-output "api_url"             { value = module.compute.alb_dns_name }
-output "frontend_url"        { value = module.frontend.cloudfront_domain }
-output "ecr_api"             { value = module.compute.ecr_repository_url }
-output "ecr_weather_service" { value = module.compute.ecr_weather_service_repo_url }
-output "ecr_mcp_documents"   { value = module.compute.ecr_mcp_documents_repo_url }
+output "api_url"                    { value = module.compute.alb_dns_name }
+output "frontend_url"               { value = module.frontend.cloudfront_domain }
+output "ecr_api"                    { value = module.compute.ecr_repository_url }
+output "ecr_weather_service"        { value = module.compute.ecr_weather_service_repo_url }
+output "ecr_mcp_documents"          { value = module.compute.ecr_mcp_documents_repo_url }
+output "ecr_mcp_personal_finance"   { value = module.compute.ecr_mcp_personal_finance_repo_url }

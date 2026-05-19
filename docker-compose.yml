@@ -1,4 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
+  # Redis — session store, tool-result payloads, LangGraph checkpoints,
+  #   semantic cache (Ollama only), long-term memory, RAG ingestion queue.
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Postgres (pgvector) — personal-finance tables, RAG document metadata + vectors.
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_password}
+      POSTGRES_DB: finance_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # S3 Ninja — local S3-compatible object store for file uploads.
+  #   External port 9444 maps to S3 Ninja's internal port 9000.
+  s3:
+    image: scireum/s3-ninja:8.7.0
+    ports:
+      - "9444:9000"
+    volumes:
+      - ./s3data:/data
+      - ./s3data/multipart:/home/sirius/multipart
+      - ./s3data/s3ninja-logs:/home/sirius/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/ui"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # MCP Microservices
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # FastMCP weather service (port 8002) — wraps an external weather API.
   mcp_weather_service:
     build: ./services/mcp_weather_service
     develop:
@@ -13,59 +70,9 @@ services:
       timeout: 10s
       start_period: 5s
 
-  backend:
-    build: ./backend
-    develop:
-      watch:
-        - path: ./backend/src
-          action: rebuild
-        - path: ./backend/3rdparty
-          action: rebuild
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      OLLAMA_SUMMARIZER_MODEL: ${OLLAMA_SUMMARIZER_MODEL:-qwen2.5:7b}
-      USE_AWS_STORE: "0"
-      USE_REDIS_STORE: "1"
-      REDIS_URL: "redis://redis:6379"
-      CORS_ORIGINS: '["http://localhost:5173"]'
-      INTERNAL_S3_ENDPOINT_URL: http://s3:9000
-      EXTERNAL_S3_ENDPOINT_URL: http://localhost:9444
-      POSTGRES_URL: postgresql://finance_user:${POSTGRES_PASSWORD:-finance_password}@postgres:5432/finance_db
-      WEATHER_SERVICE_URL: http://mcp_weather_service:8002
-      RAG_SERVICE_URL: http://mcp_documents:8003
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 10s
-      start_period: 5s
-    depends_on:
-      redis:
-        condition: service_started
-      postgres:
-        condition: service_started
-      mcp_weather_service:
-        condition: service_started
-      mcp_documents:
-        condition: service_started
-
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
+  # FastMCP RAG service (port 8003) — document ingestion, chunking, embedding,
+  #   and hybrid (vector + BM25) search backed by pgvector + Redis queue.
+  #   Supports txt, pdf, docx, pptx, xlsx, and images.
   mcp_documents:
     build: ./services/mcp_documents
     env_file:
@@ -93,22 +100,79 @@ services:
       redis:
         condition: service_healthy
 
-  postgres:
-    image: pgvector/pgvector:pg16
+  # FastMCP personal-finance service (port 8004) — credit cards, loans, income,
+  #   expenses, savings transfers, and monthly financial reports backed by Postgres.
+  mcp_personal_finance:
+    build: ./services/mcp_personal_finance
+    develop:
+      watch:
+        - path: ./services/mcp_personal_finance
+          action: rebuild
     ports:
-      - "5432:5432"
+      - "8004:8004"
     environment:
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_password}
-      POSTGRES_DB: finance_db
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      FINANCE_DB_URL: postgresql://finance_user:${POSTGRES_PASSWORD:-finance_password}@postgres:5432/finance_db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Application
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # FastAPI backend (port 8000) — LangGraph agent, tool kernel, SSE streaming.
+  #   LLM_PROVIDER: "anthropic" (requires ANTHROPIC_API_KEY) or "ollama" (default).
+  #   USE_AWS_STORE=1 switches session/payload storage from Redis to DynamoDB+S3.
+  backend:
+    build: ./backend
+    develop:
+      watch:
+        - path: ./backend/src
+          action: rebuild
+        - path: ./backend/3rdparty
+          action: rebuild
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      OLLAMA_SUMMARIZER_MODEL: ${OLLAMA_SUMMARIZER_MODEL:-qwen2.5:7b}
+      USE_AWS_STORE: "0"
+      USE_REDIS_STORE: "1"
+      REDIS_URL: "redis://redis:6379"
+      CORS_ORIGINS: '["http://localhost:5173"]'
+      INTERNAL_S3_ENDPOINT_URL: http://s3:9000
+      EXTERNAL_S3_ENDPOINT_URL: http://localhost:9444
+      WEATHER_SERVICE_URL: http://mcp_weather_service:8002
+      RAG_SERVICE_URL: http://mcp_documents:8003
+      FINANCE_SERVICE_URL: http://mcp_personal_finance:8004
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 5s
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_started
+      mcp_weather_service:
+        condition: service_started
+      mcp_documents:
+        condition: service_started
+      mcp_personal_finance:
+        condition: service_started
+
+  # React/Vite frontend (port 5173) — chat UI, SSE event consumer.
+  #   Dev proxy forwards /chat, /sessions, /health, /upload_url, /config → backend.
   frontend:
     build: ./frontend
     develop:
@@ -126,24 +190,6 @@ services:
       backend:
         condition: service_healthy
 
-  s3:
-    image: scireum/s3-ninja:8.7.0
-    ports:
-      - 9444:9000
-    volumes:
-      - ./s3data:/data
-      - ./s3data/multipart:/home/sirius/multipart
-      - ./s3data/s3ninja-logs:/home/sirius/logs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/ui"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
 volumes:
-  ollama-data:
   redis-data:
   postgres-data:
-  s3ninja-logs:
-    driver: local

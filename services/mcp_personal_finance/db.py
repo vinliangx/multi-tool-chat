@@ -1,10 +1,9 @@
-"""Async PostgreSQL pool and schema migrations for personal_finance."""
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import asyncpg
+from config import settings
 
 _pool: asyncpg.Pool | None = None
 
@@ -83,15 +82,14 @@ CREATE TABLE IF NOT EXISTS savings_transfers (
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        url = os.environ.get(
-            "POSTGRES_URL",
-            "postgresql://finance_user:finance_password@localhost:5432/finance_db",
-        )
-        _pool = await asyncpg.create_pool(url)
+        _pool = await asyncpg.create_pool(settings.finance_db_url)
         async with _pool.acquire() as conn:
             await conn.execute(_SCHEMA)
     return _pool
 
 
-def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
-    return dict(row)
+async def close_pool() -> None:
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None

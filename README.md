@@ -61,12 +61,17 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                            └────────────┘
 
                            ┌──────────────────────┐
-                           │ MCP Weather Service  │  (weather_lookup → FastMCP /mcp)
+                           │ MCP Weather Service  │  port 8002 — weather_lookup
                            └──────────────────────┘
 
                            ┌──────────────────────┐
-                           │ MCP Documents Service│  (rag_* tools → FastMCP /mcp)
+                           │ MCP Documents Service│  port 8003 — rag_* + doc_preview
                            │ (chunking + pgvector)│
+                           └──────────────────────┘
+
+                           ┌──────────────────────┐
+                           │ MCP Finance Service  │  port 8004 — personal_finance.*
+                           │ (asyncpg + Postgres) │
                            └──────────────────────┘
 ```
 
@@ -81,8 +86,8 @@ Key design choices:
 - **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis.
 - **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
-- **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
-- **MCP microservice tools.** Two standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, Redis-backed ingestion queue, document listing/deletion, and document preview. Both are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
+- **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. The backend plugins are thin proxies — all DB logic lives in `mcp_personal_finance` (port 8004), a standalone FastMCP microservice that owns the Postgres schema and `asyncpg` pool.
+- **MCP microservice tools.** Three standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, Redis-backed ingestion queue, document listing/deletion, and document preview; `mcp_personal_finance` (port 8004) owns all personal-finance database access. All three are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
 - **RAG pipeline.** `rag_upload` queues an S3 document (txt, pdf, docx, pptx, xlsx, images) for async chunking and embedding by `mcp_documents`. A background worker embeds chunks via Ollama and stores them in PostgreSQL with pgvector. `rag_search` runs a cosine-similarity query over stored chunks and returns ranked results with temporary presigned S3 links. `rag_queue_status` shows the ingestion queue. `rag_list` lists all indexed documents with status, chunk count, and presigned download links. `rag_delete` removes a document from the index and deletes it from S3. `doc_preview` downloads and summarizes a document without indexing it.
 - **LLM instance caching.** `agent/llm.py` caches `ChatAnthropic` / `ChatOllama` instances keyed by `(model, max_tokens, reasoning)`, avoiding re-construction on every request.
 
@@ -103,10 +108,11 @@ backend/        Python (FastAPI + LangGraph), Pants targets
                     recall, save_memory, read_memory,
                     rag_upload, rag_search, rag_status,
                     rag_list, rag_delete, doc_preview)
-                    personal_finance/ (add_credit_card, add_loan,
-                    add_income, add_expense, get_report,
-                    list_conflicts, payment_to_credit_card,
-                    payment_to_loan, transferred_to_savings, db)
+                    personal_finance/ (9 thin MCP proxies:
+                    add_credit_card, add_loan, add_income,
+                    add_expense, get_report, list_conflicts,
+                    payment_to_credit_card, payment_to_loan,
+                    transferred_to_savings)
       services/     ResultProcessor, StorageService, EventBus,
                     MemoryService, CacheService, MetricsService
     upload/     Presigned S3 URL generation
@@ -118,10 +124,14 @@ frontend/       React + Vite + TS chat UI
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
 services/
-  mcp_weather_service/  Standalone FastMCP microservice exposing get_weather MCP tool at /mcp
-  mcp_documents/        Standalone FastMCP microservice for RAG: chunking, pgvector storage,
-                        Redis ingestion queue, async worker; exposes rag_upload,
-                        rag_search, rag_queue_status, rag_list, rag_delete, doc_preview MCP tools at /mcp
+  mcp_weather_service/      FastMCP (port 8002) — get_weather tool
+  mcp_documents/            FastMCP (port 8003) — RAG: chunking, pgvector storage,
+                            Redis ingestion queue, async worker; exposes rag_upload,
+                            rag_search, rag_queue_status, rag_list, rag_delete, doc_preview
+  mcp_personal_finance/     FastMCP (port 8004) — personal finance DB logic; exposes
+                            add_credit_card, add_loan, add_income, add_expense,
+                            payment_to_credit_card, payment_to_loan, get_report,
+                            list_conflicts, transferred_to_savings
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -195,13 +205,19 @@ terraform init
 terraform apply -var="anthropic_api_key=$ANTHROPIC_API_KEY"
 
 # 2. Build & push images to ECR
-ECR=$(terraform output -raw ecr_repo)
+ECR=$(terraform output -raw ecr_api)
 ECR_WEATHER=$(terraform output -raw ecr_weather_service)
+ECR_DOCS=$(terraform output -raw ecr_mcp_documents)
+ECR_FINANCE=$(terraform output -raw ecr_mcp_personal_finance)
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR
-docker build -t $ECR:latest ../../../backend
+docker build -t $ECR:latest             ../../../backend
+docker build -t $ECR_WEATHER:latest     ../../../services/mcp_weather_service
+docker build -t $ECR_DOCS:latest        ../../../services/mcp_documents
+docker build -t $ECR_FINANCE:latest     ../../../services/mcp_personal_finance
 docker push $ECR:latest
-docker build -t $ECR_WEATHER:latest ../../../services/mcp_weather_service
 docker push $ECR_WEATHER:latest
+docker push $ECR_DOCS:latest
+docker push $ECR_FINANCE:latest
 aws ecs update-service --cluster mtc-dev-cluster --service mtc-dev-api --force-new-deployment
 
 # 3. Build & upload frontend
@@ -227,7 +243,6 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)                                                                    |
 | `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                                                                         |
 | `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                                                                              |
-| `POSTGRES_URL`                               | PostgreSQL connection string for personal finance data (default: `postgresql://finance_user:finance_password@localhost:5432/finance_db`) |
 | `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `finance_password`)                                                                |
 | `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                                                                                  |
 | `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                                                                         |
@@ -236,6 +251,7 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)                                                                   |
 | `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)                                                                  |
 | `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)                                                          |
+| `FINANCE_SERVICE_URL`                        | URL for the MCP personal-finance microservice (default: `http://localhost:8004`)                                                         |
 
 ## Tool reference
 

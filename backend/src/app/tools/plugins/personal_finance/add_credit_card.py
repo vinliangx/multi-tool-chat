@@ -1,7 +1,12 @@
+import os
+
+from fastmcp.client import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
-from app.tools.plugins.personal_finance.db import get_pool
+
+_FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class AddCreditCardArgs(BaseModel):
@@ -35,34 +40,13 @@ class AddCreditCardPlugin(ToolPlugin):
     def args_schema(self) -> type[BaseModel]:
         return AddCreditCardArgs
 
-    async def on_init(self, kernel) -> None:
-        await get_pool()
-
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                INSERT INTO credit_cards
-                    (user_id, name, credit_limit, apr, min_payment, cut_date, due_date, balance)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (user_id, name) DO UPDATE SET
-                    credit_limit = EXCLUDED.credit_limit,
-                    apr          = EXCLUDED.apr,
-                    min_payment  = EXCLUDED.min_payment,
-                    cut_date     = EXCLUDED.cut_date,
-                    due_date     = EXCLUDED.due_date,
-                    balance      = EXCLUDED.balance,
-                    updated_at   = now()
-                RETURNING id, name
-                """,
-                kwargs["user_id"],
-                kwargs["cc_name"],
-                kwargs["credit_limit"],
-                kwargs["apr"],
-                kwargs["min_payment"],
-                kwargs["cut_date"],
-                kwargs["due_date"],
-                kwargs["balance"],
-            )
-        return f"Credit card '{row['name']}' saved (id={row['id']})."
+        transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
+        try:
+            async with Client(transport) as client:
+                result = await client.call_tool("add_credit_card", kwargs)
+            if not result.content:
+                return "Error: Finance service returned empty response"
+            return result.content[-1].text
+        except Exception as e:
+            return f"Error calling finance service: {e}"

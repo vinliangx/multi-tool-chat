@@ -57,9 +57,10 @@ The system is a full-stack chat application built around a LangGraph agent that 
 | Tool kernel           | `backend/src/app/tools/kernel.py`                 | `ToolKernel` — registers plugins, runs middleware, dispatches `execute_tool()`                                                                                                                                                                                                                             |
 | Tool plugin           | `backend/src/app/tools/plugin.py`                 | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                                                                                                                                                                                          |
 | Tools                 | `backend/src/app/tools/plugins/`                  | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`, `rag_upload`, `rag_search`, `rag_status`, `rag_list`, `rag_delete`, `doc_preview`                                                                                             |
-| Personal finance      | `backend/src/app/tools/plugins/personal_finance/` | 9 tools for credit cards, loans, income, expenses, reports, transfers; `db.py` owns async PostgreSQL pool and schema migrations                                                                                                                                                                            |
+| Personal finance      | `backend/src/app/tools/plugins/personal_finance/` | 9 thin proxy plugins (`add_credit_card`, `add_loan`, `add_income`, `add_expense`, `get_report`, `list_conflicts`, `payment_to_credit_card`, `payment_to_loan`, `transferred_to_savings`); each calls the corresponding MCP tool at `{FINANCE_SERVICE_URL}/mcp` via `fastmcp.client.Client`              |
 | MCP weather service   | `services/mcp_weather_service/`                   | Standalone FastMCP microservice (port 8002) exposing a `get_weather` MCP tool at `/mcp`; called by `WeatherPlugin` via `fastmcp.client.Client`                                                                                                                                                             |
 | MCP documents service | `services/mcp_documents/`                         | Standalone FastMCP microservice (port 8003) for RAG: `main.py` exposes `rag_upload`, `rag_search`, `rag_queue_status`, `rag_list`, `rag_delete`, `doc_preview` MCP tools; `worker.py` is an async loop that chunks and embeds documents via Ollama and stores vectors in PostgreSQL with pgvector; `rag_queue.py` manages the Redis ingestion queue |
+| MCP personal-finance service | `services/mcp_personal_finance/`           | Standalone FastMCP microservice (port 8004) exposing the 9 personal-finance MCP tools; `db.py` owns the async `asyncpg` pool and runs `CREATE TABLE IF NOT EXISTS` schema init on startup; `config.py` reads `FINANCE_DB_URL`                                                                              |
 | Upload                | `backend/src/app/upload/storage_service.py`       | Presigned S3 URL generation                                                                                                                                                                                                                                                                                |
 | Frontend              | `frontend/src/`                                   | React + Vite + Tailwind chat UI with SSE consumer                                                                                                                                                                                                                                                          |
 | Infrastructure        | `infra/`                                          | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                                                                                                                                                                                            |
@@ -100,7 +101,7 @@ The agent is not automatically given full payloads — it must issue a `recall(h
 
 ### 2.9 RAG Pipeline (mcp_documents microservice)
 
-Three tools — `rag_upload`, `rag_search`, `rag_queue_status` — delegate to `mcp_documents` (port 8003), a standalone FastMCP service. The pipeline is:
+Six tools — `rag_upload`, `rag_search`, `rag_queue_status`, `rag_list`, `rag_delete`, `doc_preview` — delegate to `mcp_documents` (port 8003), a standalone FastMCP service. The pipeline is:
 
 1. **Ingest** — `rag_upload(s3_url)` inserts a document record in PostgreSQL and pushes the `doc_id` onto a Redis list (`rag:queue`). Returns `job_id` and queue position.
 2. **Process** — A background `worker_loop()` dequeues jobs, downloads the file from S3, splits it into overlapping text chunks (`chunk_size=1000`, `overlap=200`), embeds each chunk via `POST /api/embed` (Ollama), and writes chunk rows with a `vector(768)` column to a pgvector table.
@@ -116,19 +117,21 @@ Interrupted jobs (status = `processing` at startup) are automatically re-queued 
 
 ### 2.11 MCP Microservice Tools
 
-Two standalone FastMCP services extend the tool set via the MCP protocol. Each is called by a `ToolPlugin` subclass using `fastmcp.client.Client` with `StreamableHttpTransport`, so the kernel, middleware, and `ResultProcessor` remain unchanged.
+Three standalone FastMCP services extend the tool set via the MCP protocol. Each is called by a `ToolPlugin` subclass using `fastmcp.client.Client` with `StreamableHttpTransport`, so the kernel, middleware, and `ResultProcessor` remain unchanged.
 
 **`mcp_weather_service`** (port 8002) — `WeatherPlugin` invokes the `get_weather` MCP tool at `{WEATHER_SERVICE_URL}/mcp`. The service handles geocoding (via open-meteo) and returns current temperature, wind speed, and an hourly forecast. It is a minimal FastMCP app with no FastAPI dependency — only `fastmcp` and `httpx`.
 
 **`mcp_documents`** (port 8003) — `RagUploadPlugin`, `RagSearchPlugin`, `RagStatusPlugin`, `RagListPlugin`, `RagDeletePlugin`, and `DocPreviewPlugin` invoke the corresponding MCP tools at `{RAG_SERVICE_URL}/mcp`. The service manages the full RAG pipeline (see §2.9). Its `main.py` registers all MCP tools and runs a background worker task via a lifespan handler.
 
-This pattern demonstrates that `ToolPlugin` subclasses are provider-agnostic: a plugin can call a local library, a database, a plain REST service, or an MCP server. Docker Compose starts both services and wires `WEATHER_SERVICE_URL` and `RAG_SERVICE_URL` into the backend environment automatically.
+**`mcp_personal_finance`** (port 8004) — nine thin proxy plugins under `tools/plugins/personal_finance/` invoke the corresponding MCP tools at `{FINANCE_SERVICE_URL}/mcp`. The service owns the PostgreSQL schema (inline `CREATE TABLE IF NOT EXISTS` on startup) and all DB access, so the backend plugins contain no database logic. The service exposes `add_credit_card`, `add_loan`, `add_income`, `add_expense`, `payment_to_credit_card`, `payment_to_loan`, `get_report`, `list_conflicts`, and `transferred_to_savings`.
 
-### 2.10 Personal Finance Plugin Suite
+This pattern demonstrates that `ToolPlugin` subclasses are provider-agnostic: a plugin can call a local library, a database, a plain REST service, or an MCP server. Docker Compose starts all three services and wires `WEATHER_SERVICE_URL`, `RAG_SERVICE_URL`, and `FINANCE_SERVICE_URL` into the backend environment automatically.
 
-Nine tools under the `personal_finance.*` namespace handle budgeting and liability tracking. They share an async `asyncpg` connection pool in `tools/plugins/personal_finance/db.py` that auto-runs `CREATE TABLE IF NOT EXISTS` migrations on first acquisition. Data is stored in PostgreSQL (a separate `postgres` service in Docker Compose), independent of Redis.
+### 2.10 Personal Finance Pipeline (mcp_personal_finance microservice)
 
-Tables: `credit_cards`, `loans`, `income`, `expenses`, `pending_conflicts`, `savings_transfers`.
+Nine tools under the `personal_finance.*` namespace handle budgeting and liability tracking. All database logic lives in `services/mcp_personal_finance/`, a standalone FastMCP service (port 8004). The backend plugins in `tools/plugins/personal_finance/` are thin proxies that forward calls to `{FINANCE_SERVICE_URL}/mcp` via `fastmcp.client.Client` — they contain no database code.
+
+The service's `db.py` owns the async `asyncpg` pool and runs `CREATE TABLE IF NOT EXISTS` schema init on first pool acquisition. Tables: `credit_cards`, `loans`, `income`, `expenses`, `pending_conflicts`, `savings_transfers`.
 
 All tools are scoped by `user_id`, which the agent derives from a prior `/login` call or from memory. Duplicate-entry conflicts are written to `pending_conflicts` rather than silently overwriting existing records, and `list_conflicts` surfaces them for user resolution.
 

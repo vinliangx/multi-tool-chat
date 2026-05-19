@@ -32,6 +32,12 @@ resource "aws_ecr_repository" "mcp_documents" {
   force_delete         = true
 }
 
+resource "aws_ecr_repository" "mcp_personal_finance" {
+  name                 = "${var.name}-mcp-personal-finance"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
 # --- Secrets ---
 
 resource "aws_ssm_parameter" "anthropic_key" {
@@ -163,6 +169,11 @@ resource "aws_cloudwatch_log_group" "mcp_documents" {
   retention_in_days = 14
 }
 
+resource "aws_cloudwatch_log_group" "mcp_personal_finance" {
+  name              = "/${var.name}/mcp-personal-finance"
+  retention_in_days = 14
+}
+
 # --- ECS task definition ---
 # mcp-weather-service and mcp-documents run as sidecars so the api container
 # can reach them via localhost (awsvpc shares the network namespace per task).
@@ -192,6 +203,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "REDIS_URL",            value = local.redis_url },
         { name = "WEATHER_SERVICE_URL",  value = "http://localhost:8002" },
         { name = "RAG_SERVICE_URL",      value = "http://localhost:8003" },
+        { name = "FINANCE_SERVICE_URL",  value = "http://localhost:8004" },
       ]
       secrets = [
         { name = "ANTHROPIC_API_KEY", valueFrom = aws_ssm_parameter.anthropic_key.arn },
@@ -228,7 +240,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "REDIS_URL", value = local.redis_url },
       ]
       secrets = [
-        { name = "POSTGRES_URL", valueFrom = var.postgres_url_ssm_arn },
+        { name = "RAG_DB_URL", valueFrom = var.postgres_url_ssm_arn },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -236,6 +248,23 @@ resource "aws_ecs_task_definition" "api" {
           awslogs-group         = aws_cloudwatch_log_group.mcp_documents.name
           awslogs-region        = var.region
           awslogs-stream-prefix = "mcp-documents"
+        }
+      }
+    },
+    {
+      name      = "mcp-personal-finance"
+      image     = "${aws_ecr_repository.mcp_personal_finance.repository_url}:latest"
+      essential = false
+      portMappings = [{ containerPort = 8004 }]
+      secrets = [
+        { name = "FINANCE_DB_URL", valueFrom = var.postgres_url_ssm_arn },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.mcp_personal_finance.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "mcp-personal-finance"
         }
       }
     },
@@ -263,7 +292,8 @@ resource "aws_ecs_service" "api" {
   depends_on = [aws_lb_listener.http]
 }
 
-output "alb_dns_name"                 { value = aws_lb.this.dns_name }
-output "ecr_repository_url"           { value = aws_ecr_repository.api.repository_url }
-output "ecr_weather_service_repo_url" { value = aws_ecr_repository.weather_service.repository_url }
-output "ecr_mcp_documents_repo_url"   { value = aws_ecr_repository.mcp_documents.repository_url }
+output "alb_dns_name"                        { value = aws_lb.this.dns_name }
+output "ecr_repository_url"                  { value = aws_ecr_repository.api.repository_url }
+output "ecr_weather_service_repo_url"        { value = aws_ecr_repository.weather_service.repository_url }
+output "ecr_mcp_documents_repo_url"          { value = aws_ecr_repository.mcp_documents.repository_url }
+output "ecr_mcp_personal_finance_repo_url"   { value = aws_ecr_repository.mcp_personal_finance.repository_url }

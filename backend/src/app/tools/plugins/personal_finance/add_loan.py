@@ -1,7 +1,12 @@
+import os
+
+from fastmcp.client import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
-from app.tools.plugins.personal_finance.db import get_pool
+
+_FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class AddLoanArgs(BaseModel):
@@ -33,34 +38,13 @@ class AddLoanPlugin(ToolPlugin):
     def args_schema(self) -> type[BaseModel]:
         return AddLoanArgs
 
-    async def on_init(self, kernel) -> None:
-        await get_pool()
-
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                INSERT INTO loans
-                    (user_id, name, original_amount, balance, apr, monthly_payment, due_date, start_date)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date)
-                ON CONFLICT (user_id, name) DO UPDATE SET
-                    original_amount = EXCLUDED.original_amount,
-                    balance         = EXCLUDED.balance,
-                    apr             = EXCLUDED.apr,
-                    monthly_payment = EXCLUDED.monthly_payment,
-                    due_date        = EXCLUDED.due_date,
-                    start_date      = EXCLUDED.start_date,
-                    updated_at      = now()
-                RETURNING id, name
-                """,
-                kwargs["user_id"],
-                kwargs["loan_name"],
-                kwargs["original_amount"],
-                kwargs["balance"],
-                kwargs["apr"],
-                kwargs["monthly_payment"],
-                kwargs["due_date"],
-                kwargs["start_date"],
-            )
-        return f"Loan '{row['name']}' saved (id={row['id']})."
+        transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
+        try:
+            async with Client(transport) as client:
+                result = await client.call_tool("add_loan", kwargs)
+            if not result.content:
+                return "Error: Finance service returned empty response"
+            return result.content[-1].text
+        except Exception as e:
+            return f"Error calling finance service: {e}"

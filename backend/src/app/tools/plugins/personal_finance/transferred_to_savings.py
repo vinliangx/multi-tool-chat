@@ -1,9 +1,13 @@
+import os
 from datetime import date
 
+from fastmcp.client import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field
 
 from app.tools.plugin import ToolContext, ToolPlugin
-from app.tools.plugins.personal_finance.db import get_pool
+
+_FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class TransferredToSavingsArgs(BaseModel):
@@ -34,25 +38,13 @@ class TransferredToSavingsPlugin(ToolPlugin):
     def args_schema(self) -> type[BaseModel]:
         return TransferredToSavingsArgs
 
-    async def on_init(self, kernel) -> None:
-        await get_pool()
-
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                INSERT INTO savings_transfers (user_id, amount, date, note)
-                VALUES ($1, $2, $3::date, $4)
-                RETURNING id, amount, date
-                """,
-                kwargs["user_id"],
-                kwargs["amount"],
-                kwargs["date"],
-                kwargs.get("note"),
-            )
-        note_part = f" ({kwargs['note']})" if kwargs.get("note") else ""
-        return (
-            f"Saved ${row['amount']:.2f}{note_part} on {row['date'].isoformat()} "
-            f"(id={row['id']})."
-        )
+        transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
+        try:
+            async with Client(transport) as client:
+                result = await client.call_tool("transferred_to_savings", kwargs)
+            if not result.content:
+                return "Error: Finance service returned empty response"
+            return result.content[-1].text
+        except Exception as e:
+            return f"Error calling finance service: {e}"

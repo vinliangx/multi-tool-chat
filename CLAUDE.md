@@ -102,9 +102,25 @@ class MyPlugin(ToolPlugin):
 
 Register the instance in `tools/plugins/__init__.py` by appending it to `ALL_PLUGINS`. The `ToolKernel` automatically runs results through `ResultProcessor` (truncation/summarization) unless `skip_result_processing = True`.
 
+### Personal finance pipeline
+
+Nine tools delegate to `mcp_personal_finance` (port 8004), a standalone FastMCP microservice:
+
+- **`personal_finance.add_credit_card`** — upserts a credit card by `(user_id, name)`.
+- **`personal_finance.add_loan`** — upserts a loan by `(user_id, name)`.
+- **`personal_finance.add_income`** — records income with duplicate detection; `force=true` overrides.
+- **`personal_finance.add_expense`** — records an expense with duplicate detection; `force=true` overrides.
+- **`personal_finance.payment_to_credit_card`** — reduces a card's balance.
+- **`personal_finance.payment_to_loan`** — reduces a loan's balance.
+- **`personal_finance.get_report`** — monthly financial summary (burn rate, daily budget, CC/loan/savings snapshot).
+- **`personal_finance.list_conflicts`** — shows pending duplicate conflicts.
+- **`personal_finance.transferred_to_savings`** — records a savings transfer.
+
+Each backend plugin in `tools/plugins/personal_finance/` is a thin proxy that calls the corresponding MCP tool at `{FINANCE_SERVICE_URL}/mcp`. The service owns the Postgres schema (inline `CREATE TABLE IF NOT EXISTS` on startup) and runs on port 8004. `FINANCE_SERVICE_URL` defaults to `http://localhost:8004`.
+
 ### RAG pipeline
 
-Three tools delegate to `mcp_documents` (port 8003), a standalone FastMCP microservice:
+Six tools delegate to `mcp_documents` (port 8003), a standalone FastMCP microservice:
 
 - **`rag_upload(s3_url)`** — inserts a document record in PostgreSQL and pushes `doc_id` onto the Redis ingestion queue. Supported formats: txt, pdf, docx, pptx, xlsx, images.
 - **`rag_search(query, top_k)`** — embeds the query via Ollama, runs a cosine-similarity pgvector query, returns ranked chunks with presigned S3 links.
