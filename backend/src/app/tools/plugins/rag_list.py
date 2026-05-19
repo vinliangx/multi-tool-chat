@@ -54,6 +54,7 @@ class RagListPlugin(ToolPlugin):
             lines.append(
                 f"\n[{i}] {d['filename']} | Status: {d['status']} | Chunks: {chunks}{error}\n"
                 f"    Uploaded: {d['created_at']} | Completed: {completed}\n"
+                f"    ID: {d['original_s3_url']}\n"
                 f"    Link: {d['s3_url']}"
             )
         if has_more:

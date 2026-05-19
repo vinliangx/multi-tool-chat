@@ -109,6 +109,9 @@ Three tools delegate to `mcp_documents` (port 8003), a standalone FastMCP micros
 - **`rag_upload(s3_url)`** — inserts a document record in PostgreSQL and pushes `doc_id` onto the Redis ingestion queue. Supported formats: txt, pdf, docx, pptx, xlsx, images.
 - **`rag_search(query, top_k)`** — embeds the query via Ollama, runs a cosine-similarity pgvector query, returns ranked chunks with presigned S3 links.
 - **`rag_queue_status()`** — returns documents in `pending` or `processing` state.
+- **`rag_list(search_term, max_documents)`** — lists all indexed documents with status, chunk count, timestamps, original `s3://` URL, and presigned download links. Supports filename filtering and pagination via `has_more`.
+- **`rag_delete(s3_url)`** — removes all chunks for a document from pgvector and deletes the S3 object. Use the original `s3://` URL from `rag_list` output.
+- **`doc_preview(s3_url)`** — downloads a document from S3 and returns a raw text snippet plus an LLM-generated summary without indexing.
 
 Each plugin calls the corresponding MCP tool at `{RAG_SERVICE_URL}/mcp` using `fastmcp.client.Client`. A background worker in `services/mcp_documents/worker.py` dequeues jobs, chunks, embeds, and stores vectors in PostgreSQL. `RAG_SERVICE_URL` defaults to `http://localhost:8003`.
 

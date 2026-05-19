@@ -100,6 +100,7 @@ async def rag_list(search_term: str | None = None, max_documents: int = 20) -> d
             {
                 "job_id": r["id"],
                 "filename": r["filename"],
+                "original_s3_url": r["s3_url"],
                 "s3_url": link,
                 "status": r["status"],
                 "created_at": r["created_at"].isoformat(),
@@ -156,6 +157,25 @@ async def rag_search(query: str, top_k: int = 5) -> list[dict]:
             }
         )
     return output
+
+
+@mcp.tool(name="rag_delete")
+async def rag_delete(s3_url: str) -> dict:
+    """Delete a document from the RAG index and remove the S3 object. s3_url must be the original s3:// URL."""
+    if not s3_url.startswith("s3://"):
+        return {"error": "s3_url must start with s3://"}
+    result = await db.delete_document_by_s3_url(s3_url)
+    if result.get("error"):
+        return result
+    _, _, rest = s3_url.partition("s3://")
+    bucket, _, key = rest.partition("/")
+    try:
+        await asyncio.to_thread(
+            lambda: _s3_client().delete_object(Bucket=bucket, Key=unquote(key))
+        )
+    except Exception as e:
+        result["s3_warning"] = f"Index removed but S3 delete failed: {e}"
+    return result
 
 
 async def _summarize_text(text: str) -> str:

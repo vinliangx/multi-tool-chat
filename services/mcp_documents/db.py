@@ -188,6 +188,29 @@ async def get_all_documents(
         return [dict(r) for r in rows]
 
 
+async def delete_document_by_s3_url(s3_url: str) -> dict[str, Any]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, s3_url, filename, status, chunk_count FROM rag.documents WHERE s3_url = $1",
+            s3_url,
+        )
+        if not row:
+            return {"error": f"No document found with s3_url: {s3_url}"}
+        if row["status"] == "processing":
+            return {"error": f"Document '{row['filename']}' is currently processing. Try again once it completes."}
+        doc_id = row["id"]
+        await conn.execute("DELETE FROM rag.chunks WHERE document_id = $1", doc_id)
+        await conn.execute("DELETE FROM rag.documents WHERE id = $1", doc_id)
+        return {
+            "deleted": True,
+            "doc_id": str(doc_id),
+            "filename": row["filename"],
+            "s3_url": row["s3_url"],
+            "chunks_removed": row["chunk_count"] or 0,
+        }
+
+
 async def get_queue_status() -> list[dict[str, Any]]:
     pool = await get_pool()
     async with pool.acquire() as conn:

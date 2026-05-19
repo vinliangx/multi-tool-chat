@@ -31,6 +31,9 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
                      │  │  rag_upload  │           │ │
                      │  │  rag_search  │           │ │
                      │  │  rag_queue_status        │ │
+                     │  │  rag_list    │           │ │
+                     │  │  rag_delete  │           │ │
+                     │  │  doc_preview │           │ │
                      │  └──────┬───────┘           │ │
                      │         ▼                   │ │
                      │  ┌──────────────┐           │ │
@@ -79,8 +82,8 @@ Key design choices:
 - **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. Finance data is persisted in PostgreSQL (separate from Redis) via an async `asyncpg` connection pool with auto-migration on first use.
-- **MCP microservice tools.** Two standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, and a Redis-backed ingestion queue. Both are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
-- **RAG pipeline.** `rag_upload` queues an S3 document (txt, pdf, docx, pptx, xlsx, images) for async chunking and embedding by `mcp_documents`. A background worker embeds chunks via Ollama and stores them in PostgreSQL with pgvector. `rag_search` runs a cosine-similarity query over stored chunks and returns ranked results with temporary presigned S3 links. `rag_queue_status` shows the ingestion queue.
+- **MCP microservice tools.** Two standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, Redis-backed ingestion queue, document listing/deletion, and document preview. Both are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
+- **RAG pipeline.** `rag_upload` queues an S3 document (txt, pdf, docx, pptx, xlsx, images) for async chunking and embedding by `mcp_documents`. A background worker embeds chunks via Ollama and stores them in PostgreSQL with pgvector. `rag_search` runs a cosine-similarity query over stored chunks and returns ranked results with temporary presigned S3 links. `rag_queue_status` shows the ingestion queue. `rag_list` lists all indexed documents with status, chunk count, and presigned download links. `rag_delete` removes a document from the index and deletes it from S3. `doc_preview` downloads and summarizes a document without indexing it.
 - **LLM instance caching.** `agent/llm.py` caches `ChatAnthropic` / `ChatOllama` instances keyed by `(model, max_tokens, reasoning)`, avoiding re-construction on every request.
 
 ## Layout
@@ -98,7 +101,8 @@ backend/        Python (FastAPI + LangGraph), Pants targets
       plugins/      One file per tool (http_fetch, csv_s3, image_s3,
                     sql_query, sql_ddl, sql_dml, weather_api,
                     recall, save_memory, read_memory,
-                    rag_upload, rag_search, rag_status)
+                    rag_upload, rag_search, rag_status,
+                    rag_list, rag_delete, doc_preview)
                     personal_finance/ (add_credit_card, add_loan,
                     add_income, add_expense, get_report,
                     list_conflicts, payment_to_credit_card,
@@ -117,7 +121,7 @@ services/
   mcp_weather_service/  Standalone FastMCP microservice exposing get_weather MCP tool at /mcp
   mcp_documents/        Standalone FastMCP microservice for RAG: chunking, pgvector storage,
                         Redis ingestion queue, async worker; exposes rag_upload,
-                        rag_search, rag_queue_status MCP tools at /mcp
+                        rag_search, rag_queue_status, rag_list, rag_delete, doc_preview MCP tools at /mcp
 infra/          Terraform (network, data, compute, frontend modules)
 pants.toml
 ```
@@ -259,6 +263,9 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 | `rag_upload`                              | Queue an S3 document (txt, pdf, docx, pptx, xlsx, images) for chunking and RAG indexing              |
 | `rag_search`                              | Semantic search over RAG-indexed documents; returns ranked chunks with presigned S3 links            |
 | `rag_queue_status`                        | Show the ordered list of documents pending or being processed by the RAG pipeline                    |
+| `rag_list`                                | List all indexed documents with status, chunk count, dates, and presigned S3 download links; optionally filter by filename |
+| `rag_delete`                              | Delete a document from the RAG index and remove it from S3 by its original `s3://` URL              |
+| `doc_preview`                             | Preview a document or image from S3 without indexing it; returns a raw text snippet and an LLM-generated summary |
 
 ## Frontend features
 
