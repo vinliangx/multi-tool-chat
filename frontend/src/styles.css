@@ -14,7 +14,7 @@
 }
 
 body {
-  @apply h-1 bg-gray-950 text-gray-200;
+  @apply h-1 bg-gray-950 text-[110%] text-gray-200;
 }
 
 main {
@@ -22,7 +22,7 @@ main {
 }
 
 .app-container {
-  @apply bg-linear-60 from-slate-900 via-sky-900 to-slate-800;
+  @apply bg-radial-[at_bottom_left] from-slate-900 via-slate-800 to-black;
 }
 
 .chat-contents {
@@ -55,10 +55,11 @@ main {
   @apply z-10 items-center justify-center pb-2 sm:pb-4;
   @apply bottom-0 left-0 h-fit w-full md:absolute;
   .chat-box {
-    @apply mx-2 w-[calc(100%-1rem)] rounded-xl bg-slate-900 p-3;
+    @apply mx-2 w-[calc(100%-1rem)] rounded-xl p-3;
     @apply sm:mx-4 sm:w-[calc(100%-2rem)] sm:p-4 md:mx-auto md:w-[88%] lg:w-[82%] xl:w-[75%];
     @apply flex;
-
+    @apply bg-radial-[at_bottom] from-slate-950 to-slate-800 ring ring-slate-700;
+    @apply shadow-2xl shadow-slate-700;
     .chat-box-container {
       @apply flex h-fit w-full gap-4;
     }
@@ -93,7 +94,7 @@ main {
 
 .chat-assistant {
   @apply w-[95%] rounded-r-xl rounded-bl-xl;
-  @apply bg-linear-120 from-gray-400 via-gray-200 to-gray-500 px-3 text-[88%] text-gray-200 sm:w-[90%] sm:px-4 sm:text-[95%];
+  @apply bg-radial-[at_bottom_left] from-gray-400 via-slate-300 to-gray-300 px-3 text-[88%] text-gray-200 sm:w-[90%] sm:px-4 sm:text-[95%];
   @apply ring ring-white;
   .chat-markdown-safe {
     @apply prose prose-sm min-w-full overflow-x-auto;
@@ -121,18 +122,22 @@ main {
 
 .chat-sidebar {
   @apply mt-4 flex-1;
+  .session {
+    @apply mx-2 mb-2 flex items-center rounded-xl;
+    @apply bg-radial-[at_top_left] from-slate-950 to-slate-800 px-3 py-4 ring ring-slate-700 hover:bg-slate-700;
+  }
 }
 
 .chat-tool-wrapper {
   @apply flex flex-col py-4;
   .chat-tool {
     @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg;
-    @apply border border-slate-900 border-b-slate-800 bg-gray-900;
+    @apply bg-gray-950 ring ring-slate-700;
     @apply p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
 
     pre {
       @apply mt-1.5 mb-0 wrap-break-word whitespace-pre-wrap text-amber-200;
-      @apply max-w-fit overflow-hidden rounded-xl border border-gray-700 bg-black p-2;
+      @apply max-w-fit overflow-hidden rounded border border-gray-700 bg-black p-4;
     }
   }
 }
@@ -147,12 +152,14 @@ main {
 .chat-reasoning-wrapper {
   .chat-reasoning {
     @apply w-fit max-w-fit min-w-[90%] self-start rounded-lg;
-    @apply border border-slate-800 border-b-slate-800 bg-gray-900;
+    @apply bg-gray-950 ring ring-slate-700;
     @apply p-[6px_10px] font-mono text-[10px] sm:p-[8px_12px] sm:text-[12px];
   }
 }
 .context-usage-badge {
-  @apply mx-auto mt-1 mb-2 flex flex-col gap-1 rounded-lg bg-slate-900 p-4 px-3;
+  @apply mx-auto mt-4 mb-4 flex flex-col gap-1 rounded-lg p-4 px-3;
+  @apply bg-radial-[at_bottom] from-slate-950 to-slate-800 ring ring-slate-700;
+  @apply shadow-2xl shadow-slate-700;
 }
 
 .context-usage-bar-track {

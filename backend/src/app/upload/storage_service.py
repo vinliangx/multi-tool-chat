@@ -14,7 +14,7 @@ class UploadRequest(BaseModel):
 
 
 def get_upload_url(req: UploadRequest):
-    key = f"{uuid.uuid4()}-{req.file_name}"
+    key = f"{uuid.uuid4()}/{req.file_name}"
     s3 = boto3.client(
         "s3",
         endpoint_url=settings.external_s3_endpoint_url,

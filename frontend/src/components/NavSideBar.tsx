@@ -21,10 +21,7 @@ export default function NavSideBar({
 
       {sessions.map((it, i) => {
         return (
-          <div
-            key={i}
-            className="bg m-h-20 mx-2 mb-2 flex items-center rounded-xl bg-slate-900 px-3 py-4 ring ring-slate-800 hover:bg-slate-700"
-          >
+          <div key={i} className="session">
             <button
               onClick={() => reuseSession(it.session_id)}
               className="text-overflow-ellipsis line-clamp-2 w-full px-4 py-1 text-left hover:cursor-pointer"

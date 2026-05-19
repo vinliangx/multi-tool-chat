@@ -12,7 +12,9 @@ export default function Header({ newSession, clearCache }: HeaderArgs) {
     <div>
       <div className="m-4 flex items-center">
         <div className="flex-1">
-          <div className="mb-2 text-xl font-bold">Multi-Tool Chat</div>
+          <div className="mb-2 bg-linear-to-r from-blue-600 to-blue-600 bg-clip-text text-xl font-bold text-transparent">
+            Multi-Tool Chat
+          </div>
           <div className="text-[80%] text-slate-300">
             <FontAwesomeIcon icon={faCode} className="mr-2" />
             Coding Challenge

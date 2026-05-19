@@ -70,7 +70,7 @@ export function ChatBox({
     <div className={isNew ? "chat-box-wrapper new" : "chat-box-wrapper"}>
       {isNew && (
         <div className="mb-10 text-center text-slate-200">
-          <div className="text-3xl font-bold">
+          <div className="text-3xl font-bold text-blue-600">
             <FontAwesomeIcon icon={faComments} className="mr-2" />
             Start here!
           </div>
@@ -78,7 +78,7 @@ export function ChatBox({
         </div>
       )}
 
-      <div className="mt-2 mb-2 flex items-center justify-center">
+      <div className="mt-2 mb-4 flex items-center justify-center">
         <div className="flex text-[70%]">
           <div className="text-blue-200 max-sm:hidden">SessionID:</div>
           <div className="ml-2 flex rounded-2xl bg-slate-800 px-2 text-white max-sm:hidden">
@@ -93,7 +93,7 @@ export function ChatBox({
 
             <div className="peer h-4 w-7 rounded-full bg-gray-500 peer-checked:bg-blue-600 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:inset-s-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white rtl:peer-checked:after:-translate-x-full"></div>
 
-            <span className="ms-3 text-xs font-medium text-gray-400 italic">
+            <span className="ms-3 text-xs font-medium text-gray-400">
               Keep reasoning expanded
             </span>
           </label>
