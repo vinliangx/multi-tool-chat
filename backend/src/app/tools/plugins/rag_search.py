@@ -51,6 +51,7 @@ class RagSearchPlugin(ToolPlugin):
             lines.append(
                 f"\n[{i}] Score: {r['score']:.3f} | File: {r['filename']}\n"
                 f"{snippet}\n"
+                f"ID: {r['original_s3_url']}\n"
                 f"Link: {r['s3_url']}"
             )
         return "\n".join(lines)

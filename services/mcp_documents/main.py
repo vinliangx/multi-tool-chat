@@ -185,6 +185,7 @@ async def rag_search(
                 "score": r.get("rerank_score", float(r["score"])),
                 "filename": r["filename"],
                 "s3_url": link,
+                "original_s3_url": r["s3_url"],
             }
         )
     return output
