@@ -21,6 +21,15 @@ from starlette.responses import JSONResponse
 logging.basicConfig(level=logging.INFO)
 
 _worker_task: asyncio.Task | None = None
+_reranker = None
+
+
+def _get_reranker():
+    global _reranker
+    if _reranker is None:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder(settings.reranker_model)
+    return _reranker
 
 
 @asynccontextmanager
@@ -131,8 +140,12 @@ async def rag_queue_status() -> list[dict]:
 
 
 @mcp.tool(name="rag_search")
-async def rag_search(query: str, top_k: int = 5) -> list[dict]:
-    """Semantic search over indexed documents. Returns ranked chunks with temporary S3."""
+async def rag_search(query: str, top_k: int = 5, score_threshold: float = 0.0) -> list[dict]:
+    """Semantic search over indexed documents. Returns ranked chunks with temporary S3 links.
+
+    score_threshold filters out vector results with cosine similarity below that value
+    before RRF merging (0.0 = no filtering).
+    """
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{settings.ollama_base_url}/api/embed",
@@ -141,17 +154,31 @@ async def rag_search(query: str, top_k: int = 5) -> list[dict]:
         resp.raise_for_status()
         query_embedding = resp.json()["embeddings"][0]
 
-    results = await db.search_chunks(query_embedding, top_k)
+    results = await db.search_chunks(query_embedding, query, top_k, score_threshold)
+
+    if settings.use_reranker and results:
+        reranker = _get_reranker()
+        pairs = [(query, r["content"]) for r in results]
+        scores = await asyncio.to_thread(reranker.predict, pairs)
+        for r, s in zip(results, scores):
+            r["rerank_score"] = float(s)
+        results.sort(key=lambda r: r["rerank_score"], reverse=True)
+
     output = []
     for r in results:
         try:
             link = _presigned_url(r["s3_url"])
         except Exception:
             link = r["s3_url"]
+        meta = r.get("metadata") or {}
+        if isinstance(meta, str):
+            import json as _json
+            meta = _json.loads(meta)
         output.append(
             {
-                "content": r["content"],
-                "score": float(r["score"]),
+                "content": meta.get("parent_text") or r["content"],
+                "chunk_content": r["content"],
+                "score": r.get("rerank_score", float(r["score"])),
                 "filename": r["filename"],
                 "s3_url": link,
             }

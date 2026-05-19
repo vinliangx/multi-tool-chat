@@ -61,6 +61,13 @@ async def init_schema() -> None:
             CREATE INDEX IF NOT EXISTS rag_chunks_embedding_idx
             ON rag.chunks USING hnsw (embedding vector_cosine_ops)
         """)
+        await conn.execute("""
+            ALTER TABLE rag.chunks ADD COLUMN IF NOT EXISTS ts_content tsvector
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS rag_chunks_ts_idx
+            ON rag.chunks USING gin(ts_content)
+        """)
 
 
 async def insert_document(doc_id: uuid.UUID, s3_url: str, filename: str) -> None:
@@ -108,41 +115,80 @@ async def insert_chunks(
     doc_id: uuid.UUID,
     chunks: list[str],
     embeddings: list[list[float]],
+    metadata_list: list[dict] | None = None,
 ) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         for i, (text, emb) in enumerate(zip(chunks, embeddings)):
+            meta = metadata_list[i] if metadata_list else {}
             await conn.execute(
-                "INSERT INTO rag.chunks (id, document_id, content, embedding, chunk_index, metadata)"
-                " VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO rag.chunks"
+                " (id, document_id, content, embedding, chunk_index, metadata, ts_content)"
+                " VALUES ($1, $2, $3, $4, $5, $6, to_tsvector('english', $3))",
                 uuid.uuid4(),
                 doc_id,
                 text,
                 np.array(emb, dtype=np.float32),
                 i,
-                json.dumps({}),
+                json.dumps(meta),
             )
 
 
 async def search_chunks(
-    query_embedding: list[float], top_k: int
+    query_embedding: list[float],
+    query_text: str,
+    top_k: int,
+    min_score: float = 0.0,
 ) -> list[dict[str, Any]]:
     pool = await get_pool()
+    fetch_k = top_k * 4
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
+            WITH vector_ranked AS (
+                SELECT c.id,
+                       ROW_NUMBER() OVER (ORDER BY c.embedding <=> $1) AS rank
+                FROM rag.chunks c
+                JOIN rag.documents d ON d.id = c.document_id
+                WHERE d.status = 'completed'
+                  AND 1 - (c.embedding <=> $1) >= $3
+                LIMIT $2
+            ),
+            bm25_ranked AS (
+                SELECT c.id,
+                       ROW_NUMBER() OVER (
+                           ORDER BY ts_rank_cd(c.ts_content,
+                                               plainto_tsquery('english', $4)) DESC
+                       ) AS rank
+                FROM rag.chunks c
+                JOIN rag.documents d ON d.id = c.document_id
+                WHERE d.status = 'completed'
+                  AND c.ts_content @@ plainto_tsquery('english', $4)
+                LIMIT $2
+            ),
+            combined AS (
+                SELECT COALESCE(v.id, b.id) AS id,
+                       COALESCE(1.0 / (60 + v.rank), 0.0)
+                     + COALESCE(1.0 / (60 + b.rank), 0.0) AS rrf_score
+                FROM vector_ranked v
+                FULL OUTER JOIN bm25_ranked b ON v.id = b.id
+            )
             SELECT c.content,
-                   d.id::text      AS document_id,
+                   d.id::text AS document_id,
                    d.s3_url,
                    d.filename,
-                   1 - (c.embedding <=> $1) AS score
-            FROM rag.chunks c
+                   cm.rrf_score AS score,
+                   c.metadata
+            FROM combined cm
+            JOIN rag.chunks c ON c.id = cm.id
             JOIN rag.documents d ON d.id = c.document_id
-            WHERE d.status = 'completed'
-            ORDER BY c.embedding <=> $1
-            LIMIT $2
+            ORDER BY cm.rrf_score DESC
+            LIMIT $5
             """,
             np.array(query_embedding, dtype=np.float32),
+            fetch_k,
+            min_score,
+            query_text,
             top_k,
         )
         return [dict(r) for r in rows]

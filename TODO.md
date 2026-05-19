@@ -15,14 +15,14 @@ Roughly 30-40% of the way to production. Right architectural bones, but signific
 
 `chunker.py` is purely character-based — splits on byte offsets with no awareness of words, sentences, or paragraphs. Chunks frequently start/end mid-word or mid-sentence, which meaningfully degrades embedding quality.
 
-- [ ] Replace with sentence-aware or semantic chunking (e.g., LangChain's `RecursiveCharacterTextSplitter`, `chonkie`, or `llama-index` node parsers)
+- [x] Replace with sentence-aware or semantic chunking (e.g., LangChain's `RecursiveCharacterTextSplitter`, `chonkie`, or `llama-index` node parsers)
 
 ### Retrieval quality
 
-- [ ] **Hybrid search** — layer BM25 (`tsvector`) alongside vector search to handle keyword-heavy queries (e.g., "find the contract dated 2024-03-15")
-- [ ] **Reranking** — apply a cross-encoder (Cohere Rerank, `cross-encoder/ms-marco-*`) after initial retrieval; this is table stakes at production
-- [ ] **Score threshold** — filter out low-similarity results; currently 0.4 and 0.9 cosine similarity results are returned with no relevance floor signal
-- [ ] **Parent-chunk retrieval** — use small chunks for search, large chunks for context; populate the `metadata` column (currently always `{}`)
+- [x] **Hybrid search** — layer BM25 (`tsvector`) alongside vector search to handle keyword-heavy queries (e.g., "find the contract dated 2024-03-15")
+- [x] **Reranking** — apply a cross-encoder (Cohere Rerank, `cross-encoder/ms-marco-*`) after initial retrieval; this is table stakes at production
+- [x] **Score threshold** — filter out low-similarity results; currently 0.4 and 0.9 cosine similarity results are returned with no relevance floor signal
+- [x] **Parent-chunk retrieval** — use small chunks for search, large chunks for context; populate the `metadata` column (currently always `{}`)
 
 ### Reliability
 

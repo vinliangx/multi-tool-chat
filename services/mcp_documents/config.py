@@ -27,5 +27,8 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 200
 
+    use_reranker: bool = False
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
 
 settings = Settings()

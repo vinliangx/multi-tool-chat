@@ -183,8 +183,20 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
         if not chunks:
             raise ValueError("Chunking produced no output")
 
-        embeddings = await _embed(chunks)
-        await db.insert_chunks(doc_id, chunks, embeddings)
+        chunk_texts = [c["text"] for c in chunks]
+        embeddings = await _embed(chunk_texts)
+
+        parent_ctx = settings.chunk_size * 2
+        metadata_list = [
+            {
+                "parent_text": text[
+                    max(0, c["start_index"] - parent_ctx // 2)
+                    : c["start_index"] + settings.chunk_size + parent_ctx // 2
+                ]
+            }
+            for c in chunks
+        ]
+        await db.insert_chunks(doc_id, chunk_texts, embeddings, metadata_list)
         await db.update_document_status(doc_id, "completed", chunk_count=len(chunks))
         log.info("Processed doc %s: %d chunks", doc_id, len(chunks))
     except Exception as exc:
