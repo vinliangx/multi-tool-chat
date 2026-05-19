@@ -28,6 +28,7 @@ def _get_reranker():
     global _reranker
     if _reranker is None:
         from sentence_transformers import CrossEncoder
+
         _reranker = CrossEncoder(settings.reranker_model)
     return _reranker
 
@@ -35,7 +36,7 @@ def _get_reranker():
 @asynccontextmanager
 async def lifespan(app):
     global _worker_task
-    await db.init_schema()
+    await db.run_migrations()
     pending = await db.get_pending_documents()
     await rag_queue.requeue_interrupted([str(d["id"]) for d in pending])
     _worker_task = asyncio.create_task(worker.worker_loop())
@@ -140,7 +141,9 @@ async def rag_queue_status() -> list[dict]:
 
 
 @mcp.tool(name="rag_search")
-async def rag_search(query: str, top_k: int = 5, score_threshold: float = 0.0) -> list[dict]:
+async def rag_search(
+    query: str, top_k: int = 5, score_threshold: float = 0.4
+) -> list[dict]:
     """Semantic search over indexed documents. Returns ranked chunks with temporary S3 links.
 
     score_threshold filters out vector results with cosine similarity below that value
@@ -173,6 +176,7 @@ async def rag_search(query: str, top_k: int = 5, score_threshold: float = 0.0) -
         meta = r.get("metadata") or {}
         if isinstance(meta, str):
             import json as _json
+
             meta = _json.loads(meta)
         output.append(
             {

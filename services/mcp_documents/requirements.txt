@@ -13,3 +13,5 @@ anthropic==0.97.0
 numpy==2.2.6
 langchain-text-splitters==1.1.2
 sentence-transformers==5.4.1
+alembic==1.16.1
+sqlalchemy[asyncio]==2.0.41

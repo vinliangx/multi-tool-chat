@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
+from pathlib import Path
 from typing import Any
 
 import asyncpg
@@ -31,43 +33,16 @@ async def close_pool() -> None:
         _pool = None
 
 
-async def init_schema() -> None:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("CREATE SCHEMA IF NOT EXISTS rag")
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS rag.documents (
-                id           UUID PRIMARY KEY,
-                s3_url       TEXT NOT NULL,
-                filename     TEXT,
-                status       TEXT NOT NULL DEFAULT 'pending',
-                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                completed_at TIMESTAMPTZ,
-                error        TEXT,
-                chunk_count  INT
-            )
-        """)
-        await conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS rag.chunks (
-                id           UUID PRIMARY KEY,
-                document_id  UUID NOT NULL REFERENCES rag.documents(id),
-                content      TEXT NOT NULL,
-                embedding    vector({settings.embedding_dimensions}),
-                chunk_index  INT NOT NULL,
-                metadata     JSONB
-            )
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS rag_chunks_embedding_idx
-            ON rag.chunks USING hnsw (embedding vector_cosine_ops)
-        """)
-        await conn.execute("""
-            ALTER TABLE rag.chunks ADD COLUMN IF NOT EXISTS ts_content tsvector
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS rag_chunks_ts_idx
-            ON rag.chunks USING gin(ts_content)
-        """)
+async def run_migrations() -> None:
+    def _upgrade() -> None:
+        from alembic import command
+        from alembic.config import Config
+
+        cfg = Config(str(Path(__file__).parent / "alembic.ini"))
+        command.upgrade(cfg, "head")
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _upgrade)
 
 
 async def insert_document(doc_id: uuid.UUID, s3_url: str, filename: str) -> None:

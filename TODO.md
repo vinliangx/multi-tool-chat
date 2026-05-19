@@ -37,7 +37,7 @@ Roughly 30-40% of the way to production. Right architectural bones, but signific
 
 ### Schema management
 
-- [ ] Replace `CREATE TABLE IF NOT EXISTS` in `db.py:34` with proper Alembic migrations — changes need to be versioned, auditable, and reversible
+- [x] Replace `CREATE TABLE IF NOT EXISTS` in `db.py:34` with proper Alembic migrations — changes need to be versioned, auditable, and reversible
 
 ### Auth / multi-tenancy
 
