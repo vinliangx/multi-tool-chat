@@ -228,15 +228,14 @@ export function App() {
           setBusy(false);
         }
       };
-
+      let evt = "message";
+      let dataStr = "";
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         const blocks = buf.split(/[\n\r]/);
         buf = blocks.pop() ?? "";
-        let evt = "message";
-        let dataStr = "";
         for (const block of blocks) {
           const lines = block.split("\n");
           for (const line of lines) {
