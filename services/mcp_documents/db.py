@@ -91,6 +91,7 @@ async def insert_chunks(
     chunks: list[str],
     embeddings: list[list[float]],
     metadata_list: list[dict] | None = None,
+    filename: str | None = None,
 ) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -99,13 +100,15 @@ async def insert_chunks(
             await conn.execute(
                 "INSERT INTO rag.chunks"
                 " (id, document_id, content, embedding, chunk_index, metadata, ts_content)"
-                " VALUES ($1, $2, $3, $4, $5, $6, to_tsvector('english', $3))",
+                " VALUES ($1, $2, $3, $4, $5, $6,"
+                "   setweight(to_tsvector('english', $7), 'B') || to_tsvector('english', $3))",
                 uuid.uuid4(),
                 doc_id,
                 text,
                 np.array(emb, dtype=np.float32),
                 i,
                 json.dumps(meta),
+                filename or "",
             )
 
 

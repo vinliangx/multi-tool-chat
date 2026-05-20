@@ -169,7 +169,8 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
     await db.update_document_status(doc_id, "processing")
     try:
         data = _download(s3_url)
-        ext = Path(s3_url.rstrip("/").split("/")[-1]).suffix.lower()
+        filename = Path(s3_url.rstrip("/").split("/")[-1]).name
+        ext = Path(filename).suffix.lower()
 
         if ext in _IMAGE_EXTS:
             text = await _describe_image(data, ext)
@@ -184,7 +185,8 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
             raise ValueError("Chunking produced no output")
 
         chunk_texts = [c["text"] for c in chunks]
-        embeddings = await _embed(chunk_texts)
+        embed_texts = [f"filename: {filename}\n\n{t}" for t in chunk_texts]
+        embeddings = await _embed(embed_texts)
 
         parent_ctx = settings.chunk_size * 2
         metadata_list = [
@@ -196,7 +198,7 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
             }
             for c in chunks
         ]
-        await db.insert_chunks(doc_id, chunk_texts, embeddings, metadata_list)
+        await db.insert_chunks(doc_id, chunk_texts, embeddings, metadata_list, filename=filename)
         await db.update_document_status(doc_id, "completed", chunk_count=len(chunks))
         log.info("Processed doc %s: %d chunks", doc_id, len(chunks))
     except Exception as exc:
