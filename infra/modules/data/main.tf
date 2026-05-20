@@ -101,7 +101,16 @@ resource "aws_ssm_parameter" "postgres_url" {
   value = "postgresql://appuser:${var.db_password}@${aws_db_instance.postgres.address}:5432/appdb"
 }
 
+# Separate password param so Keycloak can receive KC_DB_PASSWORD via ECS secrets injection.
+resource "aws_ssm_parameter" "db_password" {
+  name  = "/${var.name}/db_password"
+  type  = "SecureString"
+  value = var.db_password
+}
+
 output "tool_results_bucket_name" { value = aws_s3_bucket.tool_results.bucket }
 output "tool_results_bucket_arn"  { value = aws_s3_bucket.tool_results.arn }
 output "redis_primary_endpoint"   { value = aws_elasticache_replication_group.redis.primary_endpoint_address }
 output "postgres_url_ssm_arn"     { value = aws_ssm_parameter.postgres_url.arn }
+output "rds_address"              { value = aws_db_instance.postgres.address }
+output "db_password_ssm_arn"      { value = aws_ssm_parameter.db_password.arn }

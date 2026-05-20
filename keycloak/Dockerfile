@@ -13,3 +13,4 @@ RUN ls dist_keycloak
 FROM quay.io/keycloak/keycloak:24.0
 
 COPY --from=builder /app/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar /opt/keycloak/providers/keycloak-theme.jar
+COPY ./realm-export.json /opt/keycloak/data/import/realm-export.json

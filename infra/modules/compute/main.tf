@@ -7,9 +7,18 @@ variable "tool_results_bucket"    { type = string }
 variable "anthropic_api_key"      { type = string  sensitive = true }
 variable "redis_primary_endpoint" { type = string }
 variable "postgres_url_ssm_arn"   { type = string }
+variable "rds_address"            { type = string }
+variable "db_password_ssm_arn"    { type = string }
+variable "keycloak_admin_password" { type = string  sensitive = true }
+# CloudFront domain (known only after the frontend module runs).
+# Leave empty on first apply; re-apply with the value to update CORS and Keycloak hostname.
+variable "frontend_url"           { type = string  default = "" }
 
 locals {
-  redis_url = "redis://${var.redis_primary_endpoint}:6379"
+  redis_url         = "redis://${var.redis_primary_endpoint}:6379"
+  keycloak_jdbc_url = "jdbc:postgresql://${var.rds_address}:5432/appdb"
+  # Prefer the CloudFront domain; fall back to the ALB for the first apply.
+  external_base_url = var.frontend_url != "" ? "https://${var.frontend_url}" : "http://${aws_lb.this.dns_name}"
 }
 
 # --- ECR ---
@@ -38,12 +47,24 @@ resource "aws_ecr_repository" "mcp_personal_finance" {
   force_delete         = true
 }
 
+resource "aws_ecr_repository" "keycloak" {
+  name                 = "${var.name}-keycloak"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
 # --- Secrets ---
 
 resource "aws_ssm_parameter" "anthropic_key" {
   name  = "/${var.name}/anthropic_api_key"
   type  = "SecureString"
   value = var.anthropic_api_key
+}
+
+resource "aws_ssm_parameter" "keycloak_admin_password" {
+  name  = "/${var.name}/keycloak_admin_password"
+  type  = "SecureString"
+  value = var.keycloak_admin_password
 }
 
 # --- Security groups ---
@@ -74,6 +95,12 @@ resource "aws_security_group" "service" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -100,6 +127,22 @@ resource "aws_lb_target_group" "api" {
   health_check { path = "/health" }
 }
 
+resource "aws_lb_target_group" "keycloak" {
+  name        = "${var.name}-kc-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+  health_check {
+    path                = "/health/ready"
+    interval            = 30
+    timeout             = 10
+    healthy_threshold   = 2
+    unhealthy_threshold = 5
+    matcher             = "200"
+  }
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
@@ -107,6 +150,23 @@ resource "aws_lb_listener" "http" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+# Route Keycloak paths to the Keycloak container (port 8080).
+resource "aws_lb_listener_rule" "keycloak" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.keycloak.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/realms/*", "/resources/*", "/admin/*"]
+    }
   }
 }
 
@@ -150,7 +210,9 @@ resource "aws_iam_role_policy" "task_app" {
         Action = ["ssm:GetParameter"]
         Resource = [
           aws_ssm_parameter.anthropic_key.arn,
+          aws_ssm_parameter.keycloak_admin_password.arn,
           var.postgres_url_ssm_arn,
+          var.db_password_ssm_arn,
         ]
       },
     ]
@@ -174,14 +236,19 @@ resource "aws_cloudwatch_log_group" "mcp_personal_finance" {
   retention_in_days = 14
 }
 
+resource "aws_cloudwatch_log_group" "keycloak" {
+  name              = "/${var.name}/keycloak"
+  retention_in_days = 14
+}
+
 # --- ECS task definition ---
 # mcp-weather-service and mcp-documents run as sidecars so the api container
 # can reach them via localhost (awsvpc shares the network namespace per task).
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.name}-api"
-  cpu                      = "2048"
-  memory                   = "4096"
+  cpu                      = "4096"
+  memory                   = "8192"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.task_exec.arn
@@ -194,16 +261,21 @@ resource "aws_ecs_task_definition" "api" {
       essential = true
       portMappings = [{ containerPort = 8000 }]
       environment = [
-        { name = "LLM_PROVIDER",         value = "anthropic" },
-        { name = "MODEL_NAME",           value = "claude-sonnet-4-6" },
-        { name = "SUMMARIZER_MODEL",     value = "claude-haiku-4-5-20251001" },
-        { name = "USE_AWS_STORE",        value = "1" },
-        { name = "AWS_REGION",           value = var.region },
-        { name = "TOOL_RESULTS_BUCKET",  value = var.tool_results_bucket },
-        { name = "REDIS_URL",            value = local.redis_url },
-        { name = "WEATHER_SERVICE_URL",  value = "http://localhost:8002" },
-        { name = "RAG_SERVICE_URL",      value = "http://localhost:8003" },
-        { name = "FINANCE_SERVICE_URL",  value = "http://localhost:8004" },
+        { name = "LLM_PROVIDER",           value = "anthropic" },
+        { name = "MODEL_NAME",             value = "claude-sonnet-4-6" },
+        { name = "SUMMARIZER_MODEL",       value = "claude-haiku-4-5-20251001" },
+        { name = "USE_AWS_STORE",          value = "1" },
+        { name = "AWS_REGION",             value = var.region },
+        { name = "TOOL_RESULTS_BUCKET",    value = var.tool_results_bucket },
+        { name = "REDIS_URL",              value = local.redis_url },
+        { name = "WEATHER_SERVICE_URL",    value = "http://localhost:8002" },
+        { name = "RAG_SERVICE_URL",        value = "http://localhost:8003" },
+        { name = "FINANCE_SERVICE_URL",    value = "http://localhost:8004" },
+        { name = "KEYCLOAK_INTERNAL_URL",  value = "http://localhost:8080" },
+        { name = "KEYCLOAK_EXTERNAL_URL",  value = local.external_base_url },
+        { name = "KEYCLOAK_REALM",         value = "multi-tool-chat" },
+        { name = "KEYCLOAK_CLIENT_ID",     value = "frontend" },
+        { name = "CORS_ORIGINS",           value = jsonencode([local.external_base_url]) },
       ]
       secrets = [
         { name = "ANTHROPIC_API_KEY", valueFrom = aws_ssm_parameter.anthropic_key.arn },
@@ -214,6 +286,42 @@ resource "aws_ecs_task_definition" "api" {
           awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
+        }
+      }
+    },
+    {
+      name      = "keycloak"
+      image     = "${aws_ecr_repository.keycloak.repository_url}:latest"
+      essential = false
+      portMappings = [{ containerPort = 8080 }]
+      command   = ["start-dev", "--import-realm"]
+      environment = [
+        { name = "KC_DB",              value = "postgres" },
+        { name = "KC_DB_URL",          value = local.keycloak_jdbc_url },
+        { name = "KC_DB_USERNAME",     value = "appuser" },
+        { name = "KEYCLOAK_ADMIN",     value = "admin" },
+        { name = "KC_HOSTNAME_STRICT", value = "false" },
+        { name = "KC_HTTP_ENABLED",    value = "true" },
+        { name = "KC_PROXY_HEADERS",   value = "xforwarded" },
+        { name = "KC_HEALTH_ENABLED",  value = "true" },
+      ]
+      secrets = [
+        { name = "KC_DB_PASSWORD",          valueFrom = var.db_password_ssm_arn },
+        { name = "KEYCLOAK_ADMIN_PASSWORD", valueFrom = aws_ssm_parameter.keycloak_admin_password.arn },
+      ]
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+        interval    = 30
+        timeout     = 10
+        retries     = 5
+        startPeriod = 120
+      }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.keycloak.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "keycloak"
         }
       }
     },
@@ -274,11 +382,13 @@ resource "aws_ecs_task_definition" "api" {
 # --- ECS service (private subnets — egress via NAT) ---
 
 resource "aws_ecs_service" "api" {
-  name            = "${var.name}-api"
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                               = "${var.name}-api"
+  cluster                            = aws_ecs_cluster.this.id
+  task_definition                    = aws_ecs_task_definition.api.arn
+  desired_count                      = 1
+  launch_type                        = "FARGATE"
+  # Allow Keycloak (JVM) time to become healthy before the ALB starts draining.
+  health_check_grace_period_seconds  = 300
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.service.id]
@@ -289,7 +399,12 @@ resource "aws_ecs_service" "api" {
     container_name   = "api"
     container_port   = 8000
   }
-  depends_on = [aws_lb_listener.http]
+  load_balancer {
+    target_group_arn = aws_lb_target_group.keycloak.arn
+    container_name   = "keycloak"
+    container_port   = 8080
+  }
+  depends_on = [aws_lb_listener.http, aws_lb_listener_rule.keycloak]
 }
 
 output "alb_dns_name"                        { value = aws_lb.this.dns_name }
@@ -297,3 +412,4 @@ output "ecr_repository_url"                  { value = aws_ecr_repository.api.re
 output "ecr_weather_service_repo_url"        { value = aws_ecr_repository.weather_service.repository_url }
 output "ecr_mcp_documents_repo_url"          { value = aws_ecr_repository.mcp_documents.repository_url }
 output "ecr_mcp_personal_finance_repo_url"   { value = aws_ecr_repository.mcp_personal_finance.repository_url }
+output "ecr_keycloak_repo_url"               { value = aws_ecr_repository.keycloak.repository_url }
