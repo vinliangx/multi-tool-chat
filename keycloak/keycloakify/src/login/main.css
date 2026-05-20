@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@tailwind utilities;
+
+body.kcBodyClass {
+    @apply bg-radial-[at_bottom_left] from-slate-900 via-slate-800 to-black;
+}
+
+.kcFormCardClass {
+    @apply rounded-2xl border-none;
+    @apply shadow-2xl shadow-slate-600;
+    @apply bg-radial-[at_bottom_left] from-gray-400 via-slate-300 to-gray-300;
+}
+
+.kcButtonClass {
+    @apply rounded-xl bg-linear-to-r from-blue-500 via-blue-600 to-blue-700 px-4 py-2.5;
+    @apply text-center text-sm leading-5 font-medium text-white;
+    @apply hover:bg-linear-to-br focus:ring-4 focus:ring-blue-300 focus:outline-none dark:focus:ring-blue-800;
+}
+
+.kcInfoAreaWrapperClass {
+    @apply rounded-2xl;
+}
+
+.kcInputClass {
+    @apply ring ring-gray-200 border-none rounded-md;
+    @apply bg-gray-100 inset-shadow-xs inset-shadow-slate-700;
+}
+
+.kcFormPasswordVisibilityButtonClass {
+    @apply ml-2;
+}
+
+#kc-info-wrapper {
+    @apply bg-radial-[at_bottom_left] from-gray-400 via-slate-300 to-gray-300;
+}

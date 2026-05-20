@@ -50,6 +50,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+  # Build keycloak Theme
+  keycloak-theme:
+    image: node:lts-alpine
+    working_dir: /app/keycloak/keycloakify
+    volumes:
+      - ./keycloak:/app/keycloak
+    command: >
+      apk add -q --no-cache maven && npm install && npm run build-keycloak-theme
 
   # Keycloak — identity provider for JWT auth (local dev, in-memory DB).
   #   Imports realm-export.json on first start via --import-realm.
@@ -70,6 +78,7 @@ services:
       KC_HEALTH_ENABLED: "true"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./keycloak/keycloakify/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar:/opt/keycloak/providers/keycloak-theme.jar
     healthcheck:
       test: ["CMD", "curl -f http://localhost:8080/health/ready"]
       interval: 15s
@@ -79,6 +88,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      keycloak-theme:
+        condition: service_completed_successfully
 
   # ─────────────────────────────────────────────────────────────────────────────
   # MCP Microservices
