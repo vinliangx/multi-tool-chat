@@ -10,7 +10,6 @@ _FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class PaymentToLoanArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
     loan_name: str = Field(..., description="Loan label, e.g. 'Car loan'")
     amount: float = Field(..., gt=0, description="Payment amount in dollars")
 
@@ -35,7 +34,9 @@ class PaymentToLoanPlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("payment_to_loan", kwargs)
+                result = await client.call_tool(
+                    "payment_to_loan", {"user_id": context.user_id, **kwargs}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

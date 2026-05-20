@@ -1,13 +1,17 @@
 import {
   faCode,
   faPenToSquare,
+  faRightFromBracket,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { keycloak } from "../keycloak";
 
 export type HeaderArgs = { newSession: () => void; clearCache: () => void };
 
 export default function Header({ newSession, clearCache }: HeaderArgs) {
+  const username = keycloak.tokenParsed?.preferred_username as string | undefined;
+
   return (
     <div>
       <div className="m-4 flex items-center">
@@ -19,11 +23,21 @@ export default function Header({ newSession, clearCache }: HeaderArgs) {
             <FontAwesomeIcon icon={faCode} className="mr-2" />
             Coding Challenge
           </div>
+          {username && (
+            <div className="mt-1 text-[75%] text-slate-400">{username}</div>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           <button className="chat-new-button" onClick={newSession}>
             <FontAwesomeIcon icon={faPenToSquare} />
             <span>New</span>
+          </button>
+          <button
+            className="chat-new-button"
+            onClick={() => keycloak.logout()}
+          >
+            <FontAwesomeIcon icon={faRightFromBracket} />
+            <span>Logout</span>
           </button>
         </div>
       </div>

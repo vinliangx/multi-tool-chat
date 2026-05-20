@@ -29,9 +29,22 @@ class Settings(BaseSettings):
     tool_result_summarize_token_limit: int = 8000
     context_window_token_limit: int = 16000
 
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080"]
     redis_url: str = "redis://localhost:6379"
     memory_api_url: str = "http://localhost:8000"
+
+    keycloak_external_url: str = "http://localhost:8080"
+    keycloak_internal_url: str = "http://keycloak:8080"
+    keycloak_realm: str = "multi-tool-chat"
+    keycloak_client_id: str = "frontend"
+
+    @property
+    def keycloak_jwks_url(self) -> str:
+        return f"{self.keycloak_internal_url}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
+
+    @property
+    def keycloak_issuer(self) -> str:
+        return f"{self.keycloak_external_url}/realms/{self.keycloak_realm}"
 
     external_s3_endpoint_url: str = "http://localhost:9444"
     internal_s3_endpoint_url: str = "http://localhost:9444"

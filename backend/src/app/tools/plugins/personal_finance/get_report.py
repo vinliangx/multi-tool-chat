@@ -2,7 +2,7 @@ import os
 
 from fastmcp.client import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.tools.plugin import ToolContext, ToolPlugin
 
@@ -10,7 +10,7 @@ _FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class GetReportArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
+    pass
 
 
 class GetReportPlugin(ToolPlugin):
@@ -34,7 +34,9 @@ class GetReportPlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("get_report", kwargs)
+                result = await client.call_tool(
+                    "get_report", {"user_id": context.user_id}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

@@ -11,7 +11,6 @@ _FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class TransferredToSavingsArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
     amount: float = Field(
         ..., gt=0, description="Amount transferred to savings in dollars"
     )
@@ -42,7 +41,9 @@ class TransferredToSavingsPlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("transferred_to_savings", kwargs)
+                result = await client.call_tool(
+                    "transferred_to_savings", {"user_id": context.user_id, **kwargs}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

@@ -257,7 +257,7 @@ resource "aws_ecs_task_definition" "api" {
       essential = false
       portMappings = [{ containerPort = 8004 }]
       secrets = [
-        { name = "FINANCE_DB_URL", valueFrom = var.postgres_url_ssm_arn },
+        { name = "CHAT_APP_URL", valueFrom = var.postgres_url_ssm_arn },
       ]
       logConfiguration = {
         logDriver = "awslogs"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "./api";
 import BubbleAssistant from "./components/BubbleAssistant";
 import BubbleReasoning from "./components/BubbleReasoning";
 import BubbleTool from "./components/BubbleTool";
@@ -72,7 +73,7 @@ export function App() {
   };
 
   const loadSessions = () => {
-    fetch(`/sessions`, { method: "GET" })
+    apiFetch(`/sessions`, { method: "GET" })
       .then((response) => response.json())
       .then((data) => setSessions(data));
   };
@@ -80,7 +81,7 @@ export function App() {
   useEffect(loadSessions, [activeSessionId]);
 
   useEffect(() => {
-    fetch(`/config`)
+    apiFetch(`/config`)
       .then((r) => r.json())
       .then((data) => setContextWindowLimit(data.context_window_token_limit));
   }, []);
@@ -105,7 +106,7 @@ export function App() {
     setBusy(true);
 
     try {
-      const resp = await fetch(`${API}/chat`, {
+      const resp = await apiFetch(`${API}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -287,7 +288,7 @@ export function App() {
     setLoadingHistory(true);
     setContextUsage(null);
     try {
-      const resp = await fetch(`/sessions/${session_id}/messages`);
+      const resp = await apiFetch(`/sessions/${session_id}/messages`);
       const data: Item[] = await resp.json();
       setItems(data);
       setMessages(data.filter((x) => x.kind == "user").map((x) => x.text));
@@ -304,7 +305,7 @@ export function App() {
         "Clear the semantic cache? All cached responses will be removed.",
       onConfirm: () => {
         setConfirm(null);
-        fetch(`/cache`, { method: "DELETE" }).catch(() => {});
+        apiFetch(`/cache`, { method: "DELETE" }).catch(() => {});
       },
     });
   };
@@ -325,7 +326,7 @@ export function App() {
   };
 
   const deleteSession = (session_id: string) => {
-    fetch(`/sessions?session_id=${session_id}`, { method: "DELETE" })
+    apiFetch(`/sessions?session_id=${session_id}`, { method: "DELETE" })
       .then(loadSessions)
       .catch(loadSessions);
     if (activeSessionId == session_id) {

@@ -43,4 +43,5 @@ class ToolResultRecord(BaseModel):
 class SessionRecord(BaseModel):
     session_id: str
     title: str
+    user_id: str = ""
     created_at: str = Field(default_factory=_now)

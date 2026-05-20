@@ -22,7 +22,6 @@ CATEGORIES = Literal[
 
 
 class AddExpenseArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
     amount: float = Field(..., description="Expense amount in dollars")
     description: str = Field(..., description="Short label for the expense")
     date: str = Field(..., description="Date of the expense in YYYY-MM-DD format")
@@ -54,7 +53,9 @@ class AddExpensePlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("add_expense", kwargs)
+                result = await client.call_tool(
+                    "add_expense", {"user_id": context.user_id, **kwargs}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

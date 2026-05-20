@@ -231,57 +231,57 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 
 ## Required env (backend)
 
-| Variable                                     | Purpose                                                                                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `LLM_PROVIDER`                               | `anthropic` (default) or `ollama`                                                                                                        |
-| `ANTHROPIC_API_KEY`                          | LLM access when `LLM_PROVIDER=anthropic`                                                                                                 |
-| `MODEL_NAME`                                 | Override main LLM (default: `claude-sonnet-4-6`)                                                                                         |
-| `SUMMARIZER_MODEL`                           | Override summarizer (default: `claude-haiku-4-5-20251001`)                                                                               |
-| `OLLAMA_BASE_URL`                            | Ollama server URL (default: `http://localhost:11434`)                                                                                    |
-| `OLLAMA_MODEL`                               | Ollama chat model (default: `qwen2.5:7b`)                                                                                                |
-| `OLLAMA_SUMMARIZER_MODEL`                    | Ollama summarizer model                                                                                                                  |
-| `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)                                                                    |
-| `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                                                                         |
-| `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                                                                              |
-| `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `finance_password`)                                                                |
-| `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                                                                                  |
-| `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                                                                         |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                                                                           |
-| `BUCKET_NAME`                                | S3 bucket for file uploads                                                                                                               |
-| `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)                                                                   |
-| `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)                                                                  |
-| `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)                                                          |
-| `FINANCE_SERVICE_URL`                        | URL for the MCP personal-finance microservice (default: `http://localhost:8004`)                                                         |
+| Variable                                     | Purpose                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                               | `anthropic` (default) or `ollama`                                                |
+| `ANTHROPIC_API_KEY`                          | LLM access when `LLM_PROVIDER=anthropic`                                         |
+| `MODEL_NAME`                                 | Override main LLM (default: `claude-sonnet-4-6`)                                 |
+| `SUMMARIZER_MODEL`                           | Override summarizer (default: `claude-haiku-4-5-20251001`)                       |
+| `OLLAMA_BASE_URL`                            | Ollama server URL (default: `http://localhost:11434`)                            |
+| `OLLAMA_MODEL`                               | Ollama chat model (default: `qwen2.5:7b`)                                        |
+| `OLLAMA_SUMMARIZER_MODEL`                    | Ollama summarizer model                                                          |
+| `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)            |
+| `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                 |
+| `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                      |
+| `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `chat_app_passw0rd`)       |
+| `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                          |
+| `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                 |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                   |
+| `BUCKET_NAME`                                | S3 bucket for file uploads                                                       |
+| `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)           |
+| `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)          |
+| `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)  |
+| `FINANCE_SERVICE_URL`                        | URL for the MCP personal-finance microservice (default: `http://localhost:8004`) |
 
 ## Tool reference
 
-| Tool                                      | Description                                                                                          |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `http_fetch`                              | Fetch a URL and return the response body                                                             |
-| `csv_s3`                                  | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans              |
-| `image_read`                              | Read an image from S3 and analyze it with the vision LLM; OCR supported                              |
-| `sql_query`                               | Run a SELECT query against the local SQLite DB                                                       |
-| `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                                           |
-| `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                              |
-| `weather_lookup`                          | Get current weather + hourly temperature forecast for a lat/lon via the FastMCP weather microservice |
-| `recall`                                  | Retrieve a full tool-result payload by handle                                                        |
-| `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                              |
-| `read_memory`                             | Read stored user facts, likes, and dislikes                                                          |
-| `personal_finance.add_credit_card`        | Register a credit card with limit, APR, and billing dates                                            |
-| `personal_finance.add_loan`               | Register a loan with balance, APR, and payment schedule                                              |
-| `personal_finance.add_income`             | Record an income entry (one-time or recurring)                                                       |
-| `personal_finance.add_expense`            | Record an expense with category and date                                                             |
-| `personal_finance.get_report`             | Generate a monthly financial summary: burn rate and daily budget                                     |
-| `personal_finance.list_conflicts`         | List pending duplicate-entry conflicts awaiting resolution                                           |
-| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                                   |
-| `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                                          |
-| `personal_finance.transferred_to_savings` | Record a transfer to savings                                                                         |
-| `rag_upload`                              | Queue an S3 document (txt, pdf, docx, pptx, xlsx, images) for chunking and RAG indexing              |
-| `rag_search`                              | Semantic search over RAG-indexed documents; returns ranked chunks with presigned S3 links            |
-| `rag_queue_status`                        | Show the ordered list of documents pending or being processed by the RAG pipeline                    |
+| Tool                                      | Description                                                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `http_fetch`                              | Fetch a URL and return the response body                                                                                   |
+| `csv_s3`                                  | Read a CSV file from S3; supports `filter_column`/`filter_value` for full-dataset scans                                    |
+| `image_read`                              | Read an image from S3 and analyze it with the vision LLM; OCR supported                                                    |
+| `sql_query`                               | Run a SELECT query against the local SQLite DB                                                                             |
+| `sql_ddl`                                 | Run CREATE / DROP / ALTER TABLE statements                                                                                 |
+| `sql_dml`                                 | Run INSERT / UPDATE / DELETE statements                                                                                    |
+| `weather_lookup`                          | Get current weather + hourly temperature forecast for a lat/lon via the FastMCP weather microservice                       |
+| `recall`                                  | Retrieve a full tool-result payload by handle                                                                              |
+| `save_memory`                             | Persist user facts, likes, and dislikes across sessions                                                                    |
+| `read_memory`                             | Read stored user facts, likes, and dislikes                                                                                |
+| `personal_finance.add_credit_card`        | Register a credit card with limit, APR, and billing dates                                                                  |
+| `personal_finance.add_loan`               | Register a loan with balance, APR, and payment schedule                                                                    |
+| `personal_finance.add_income`             | Record an income entry (one-time or recurring)                                                                             |
+| `personal_finance.add_expense`            | Record an expense with category and date                                                                                   |
+| `personal_finance.get_report`             | Generate a monthly financial summary: burn rate and daily budget                                                           |
+| `personal_finance.list_conflicts`         | List pending duplicate-entry conflicts awaiting resolution                                                                 |
+| `personal_finance.payment_to_credit_card` | Record a payment made toward a credit card balance                                                                         |
+| `personal_finance.payment_to_loan`        | Record a payment made toward a loan balance                                                                                |
+| `personal_finance.transferred_to_savings` | Record a transfer to savings                                                                                               |
+| `rag_upload`                              | Queue an S3 document (txt, pdf, docx, pptx, xlsx, images) for chunking and RAG indexing                                    |
+| `rag_search`                              | Semantic search over RAG-indexed documents; returns ranked chunks with presigned S3 links                                  |
+| `rag_queue_status`                        | Show the ordered list of documents pending or being processed by the RAG pipeline                                          |
 | `rag_list`                                | List all indexed documents with status, chunk count, dates, and presigned S3 download links; optionally filter by filename |
-| `rag_delete`                              | Delete a document from the RAG index and remove it from S3 by its original `s3://` URL              |
-| `doc_preview`                             | Preview a document or image from S3 without indexing it; returns a raw text snippet and an LLM-generated summary |
+| `rag_delete`                              | Delete a document from the RAG index and remove it from S3 by its original `s3://` URL                                     |
+| `doc_preview`                             | Preview a document or image from S3 without indexing it; returns a raw text snippet and an LLM-generated summary           |
 
 ## Frontend features
 

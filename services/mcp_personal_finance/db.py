@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS savings_transfers (
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(settings.finance_db_url)
+        _pool = await asyncpg.create_pool(settings.chat_app_url)
         async with _pool.acquire() as conn:
             await conn.execute(_SCHEMA)
     return _pool

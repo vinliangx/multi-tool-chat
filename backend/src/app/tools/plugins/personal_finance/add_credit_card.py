@@ -10,7 +10,6 @@ _FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class AddCreditCardArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
     cc_name: str = Field(..., description="Card name / issuer, e.g. 'Chase Sapphire'")
     credit_limit: float = Field(..., description="Maximum credit limit in dollars")
     apr: float = Field(..., description="Annual percentage rate, e.g. 24.99 for 24.99%")
@@ -44,7 +43,9 @@ class AddCreditCardPlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("add_credit_card", kwargs)
+                result = await client.call_tool(
+                    "add_credit_card", {"user_id": context.user_id, **kwargs}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

@@ -2,6 +2,7 @@ import { faAdd, faPaperclip } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { ThreeDot } from "react-loading-indicators";
+import { apiFetch } from "../api";
 
 export type FileUploadItem = { name: string; url: string };
 export type FileUploadArgs = {
@@ -37,7 +38,7 @@ export default function FileUpload({ filesUploaded, setBusy }: FileUploadArgs) {
       for (let index = 0; index < files.length; index++) {
         const file = files.item(index);
         if (!file) continue;
-        const res = await fetch("/upload_url", {
+        const res = await apiFetch("/upload_url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

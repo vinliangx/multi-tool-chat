@@ -1,15 +1,12 @@
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.tools.plugin import ToolContext, ToolPlugin
 
 
 class ReadMemoryArgs(BaseModel):
-    user_id: str = Field(
-        ...,
-        description="The name which the user identifies itself, like 'My name is John' for example",
-    )
+    pass
 
 
 class ReadMemoryPlugin(ToolPlugin):
@@ -26,7 +23,9 @@ class ReadMemoryPlugin(ToolPlugin):
         return ReadMemoryArgs
 
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        user_id = kwargs["user_id"]
+        user_id = context.user_id
+        if not user_id:
+            return "{}"
         data = (
             await context.services.memory.get_user_memory(user_id)
             if context.services.memory

@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     rag_db_url: str = (
-        "postgresql://finance_user:finance_password@localhost:5432/finance_db"
+        "postgresql://chat_app_user:chat_app_passw0rd@localhost:5432/chat_app"
     )
     redis_url: str = "redis://localhost:6379"
 

@@ -10,7 +10,6 @@ _FINANCE_SERVICE_URL = os.getenv("FINANCE_SERVICE_URL", "http://localhost:8004")
 
 
 class AddIncomeArgs(BaseModel):
-    user_id: str = Field(..., description="User identifier")
     amount: float = Field(..., description="Income amount in dollars")
     source: str = Field(..., description="Source label, e.g. 'Salary', 'Freelance'")
     month: int = Field(
@@ -47,7 +46,9 @@ class AddIncomePlugin(ToolPlugin):
         transport = StreamableHttpTransport(url=f"{_FINANCE_SERVICE_URL}/mcp")
         try:
             async with Client(transport) as client:
-                result = await client.call_tool("add_income", kwargs)
+                result = await client.call_tool(
+                    "add_income", {"user_id": context.user_id, **kwargs}
+                )
             if not result.content:
                 return "Error: Finance service returned empty response"
             return result.content[-1].text

@@ -4,7 +4,6 @@ from app.tools.plugin import ToolContext, ToolPlugin
 
 
 class SaveMemoryArgs(BaseModel):
-    user_id: str = Field(..., description="The name of the user in lowercase")
     facts: list[str] = Field(
         ..., description="List of facts of the user, besides his/her name"
     )
@@ -26,7 +25,9 @@ class SaveMemoryPlugin(ToolPlugin):
         return SaveMemoryArgs
 
     async def execute(self, context: ToolContext, **kwargs) -> str:
-        user_id = kwargs["user_id"]
+        user_id = context.user_id
+        if not user_id:
+            return "Error: no user_id in context"
         facts = kwargs["facts"]
         likes = kwargs["likes"]
         dislikes = kwargs["dislikes"]

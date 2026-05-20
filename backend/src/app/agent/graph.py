@@ -60,6 +60,7 @@ class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     cached: bool
     last_usage: dict
+    user_id: str
 
 
 _kernel = create_kernel()
@@ -263,7 +264,7 @@ async def get_session_messages(session_id: str) -> list[AnyMessage]:
 
 
 async def run_agent_stream(
-    session_id: str, user_message: str, files: list[dict] | None
+    session_id: str, user_message: str, files: list[dict] | None, user_id: str = ""
 ) -> AsyncIterator[dict]:
     """Yield events from a single chat turn.
 
@@ -281,6 +282,7 @@ async def run_agent_stream(
                 additional_kwargs={"files": files} if files else {},
             )
         ],
+        "user_id": user_id,
     }
     config = {"configurable": {"thread_id": session_id}}
 
@@ -293,7 +295,7 @@ async def run_agent_stream(
 
     async def _feed():
         try:
-            with _kernel.bind_context(session_id):
+            with _kernel.bind_context(session_id, user_id=user_id):
                 async for stream_type, event in graph.astream(
                     initial,
                     stream_mode=["updates", "messages"],
