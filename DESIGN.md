@@ -46,23 +46,26 @@ The system is a full-stack chat application built around a LangGraph agent that 
 
 | Layer                        | Path                                              | Responsibility                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP API                     | `backend/src/app/api/routes.py`                   | SSE chat stream, session CRUD, presigned upload URL                                                                                                                                                                                                                                                                                                 |
+| HTTP API                     | `backend/src/app/api/routes.py`                   | SSE chat stream, session CRUD, presigned upload URL; all routes protected by `get_current_user` except `/health` and `/config`                                                                                                                                                                                                                      |
+| Auth                         | `backend/src/app/auth/jwt.py`                     | `get_current_user` FastAPI dependency — validates RS256 JWT against Keycloak JWKS; `_JWKSCache` caches public keys for 5 min with key-rotation refresh; returns `CurrentUser(sub, username)`                                                                                                                                                        |
 | Agent graph                  | `backend/src/app/agent/graph.py`                  | LangGraph state machine, command node, cache nodes, streaming                                                                                                                                                                                                                                                                                       |
 | LLM factory                  | `backend/src/app/agent/llm.py`                    | Anthropic / Ollama abstraction                                                                                                                                                                                                                                                                                                                      |
 | Summarizer                   | `backend/src/app/agent/summarizer.py`             | Map-reduce sub-agent for oversized tool output                                                                                                                                                                                                                                                                                                      |
 | Vectorizer                   | `backend/src/app/agent/vectorizer.py`             | Embedding model for semantic cache                                                                                                                                                                                                                                                                                                                  |
 | Session manager              | `backend/src/app/session/manager.py`              | Truncation policy; persists and sizes every tool result                                                                                                                                                                                                                                                                                             |
-| Session store                | `backend/src/app/session/store.py`                | `RedisSessionStore` — sessions, payloads, records                                                                                                                                                                                                                                                                                                   |
-| Models                       | `backend/src/app/session/models.py`               | `ToolResultRecord`, `SessionRecord`                                                                                                                                                                                                                                                                                                                 |
+| Session store                | `backend/src/app/session/store.py`                | `RedisSessionStore` — sessions, payloads, records; sessions indexed by `user:{user_id}:sessions` sets                                                                                                                                                                                                                                               |
+| Models                       | `backend/src/app/session/models.py`               | `ToolResultRecord`, `SessionRecord` (includes `user_id` field)                                                                                                                                                                                                                                                                                      |
 | Tool kernel                  | `backend/src/app/tools/kernel.py`                 | `ToolKernel` — registers plugins, runs middleware, dispatches `execute_tool()`                                                                                                                                                                                                                                                                      |
 | Tool plugin                  | `backend/src/app/tools/plugin.py`                 | `ToolPlugin` ABC, `ToolContext`, `KernelServices`                                                                                                                                                                                                                                                                                                   |
 | Tools                        | `backend/src/app/tools/plugins/`                  | `http_fetch`, `csv_s3`, `image_s3`, `sql_query`, `sql_ddl`, `sql_dml`, `weather_api`, `recall`, `save_memory`, `read_memory`, `rag_upload`, `rag_search`, `rag_status`, `rag_list`, `rag_delete`, `doc_preview`                                                                                                                                     |
-| Personal finance             | `backend/src/app/tools/plugins/personal_finance/` | 9 thin proxy plugins (`add_credit_card`, `add_loan`, `add_income`, `add_expense`, `get_report`, `list_conflicts`, `payment_to_credit_card`, `payment_to_loan`, `transferred_to_savings`); each calls the corresponding MCP tool at `{FINANCE_SERVICE_URL}/mcp` via `fastmcp.client.Client`                                                          |
+| Personal finance             | `backend/src/app/tools/plugins/personal_finance/` | 9 thin proxy plugins (`add_credit_card`, `add_loan`, `add_income`, `add_expense`, `get_report`, `list_conflicts`, `payment_to_credit_card`, `payment_to_loan`, `transferred_to_savings`); each calls the corresponding MCP tool at `{FINANCE_SERVICE_URL}/mcp` via `fastmcp.client.Client`; `user_id` injected from `context.user_id`               |
 | MCP weather service          | `services/mcp_weather_service/`                   | Standalone FastMCP microservice (port 8002) exposing a `get_weather` MCP tool at `/mcp`; called by `WeatherPlugin` via `fastmcp.client.Client`                                                                                                                                                                                                      |
 | MCP documents service        | `services/mcp_documents/`                         | Standalone FastMCP microservice (port 8003) for RAG: `main.py` exposes `rag_upload`, `rag_search`, `rag_queue_status`, `rag_list`, `rag_delete`, `doc_preview` MCP tools; `worker.py` is an async loop that chunks and embeds documents via Ollama and stores vectors in PostgreSQL with pgvector; `rag_queue.py` manages the Redis ingestion queue |
 | MCP personal-finance service | `services/mcp_personal_finance/`                  | Standalone FastMCP microservice (port 8004) exposing the 9 personal-finance MCP tools; `db.py` owns the async `asyncpg` pool and runs `CREATE TABLE IF NOT EXISTS` schema init on startup; `config.py` reads `CHAT_APP_URL`                                                                                                                         |
-| Upload                       | `backend/src/app/upload/storage_service.py`       | Presigned S3 URL generation                                                                                                                                                                                                                                                                                                                         |
-| Frontend                     | `frontend/src/`                                   | React + Vite + Tailwind chat UI with SSE consumer                                                                                                                                                                                                                                                                                                   |
+| Upload                       | `backend/src/app/upload/storage_service.py`       | Presigned S3 URL generation; upload keys use `{uuid}-{filename}` format                                                                                                                                                                                                                                                                             |
+| Keycloak service             | `keycloak/`                                       | `Dockerfile` builds Keycloakify theme JAR then embeds it in the official Keycloak image; `realm-export.json` defines the `multi-tool-chat` realm and `frontend` OIDC client (public, PKCE); mounted into the container for `--import-realm` on first start                                                                                          |
+| Keycloak theme               | `keycloak/keycloakify/`                           | React/Vite/Tailwind custom login page built with Keycloakify; compiled to a `.jar` provider at build time                                                                                                                                                                                                                                           |
+| Frontend                     | `frontend/src/`                                   | React + Vite + Tailwind chat UI; `keycloak.ts` holds the `keycloak-js` instance; `api.ts` provides `apiFetch()` which injects `Authorization: Bearer`; `main.tsx` gates app render behind `onLoad: "login-required"`                                                                                                                                |
 | Infrastructure               | `infra/`                                          | Terraform modules: network, data (DynamoDB/S3), compute (ECS/ALB/ECR), frontend (CloudFront/S3)                                                                                                                                                                                                                                                     |
 
 ---
@@ -98,6 +101,35 @@ For inline results, `result` is added to the envelope. For oversized results, on
 ### 2.2 `recall` Is an Explicit Agent Tool
 
 The agent is not automatically given full payloads — it must issue a `recall(handle)` tool call. This prevents accidental context bloat: the agent reasons from the summary and only recalls when summary is insufficient. The system prompt instructs the agent on this contract explicitly.
+
+### 2.12 Keycloak Authentication and User Scoping
+
+Every API route except `/health` and `/config` is protected by `get_current_user`, a FastAPI dependency in `backend/src/app/auth/jwt.py`.
+
+**Token validation flow:**
+
+1. The frontend (via `keycloak-js`, `onLoad: "login-required"`) redirects the user to Keycloak if no valid session exists.
+2. After login, the frontend receives a JWT and silently refreshes it every 60 seconds (`updateToken(30)`).
+3. Every API call goes through `apiFetch()` in `frontend/src/api.ts`, which injects `Authorization: Bearer {token}`.
+4. `get_current_user` extracts the JWT `kid` header, fetches the matching RS256 public key from Keycloak's JWKS endpoint (cached in `_JWKSCache` for 5 minutes; force-refreshed on key-not-found to handle rotation), and verifies the token signature, issuer, and `azp`/`aud` against `KEYCLOAK_CLIENT_ID`.
+5. A `CurrentUser(sub, username)` dataclass is injected into route handlers.
+
+**User scoping:**
+
+- `SessionRecord` stores `user_id = CurrentUser.sub`.
+- `RedisSessionStore` indexes sessions under `user:{user_id}:sessions` (a Redis set), so `list_sessions(user_id)` returns only that user's sessions.
+- `delete_session` removes the session from the user set and also pipeline-deletes all `payload:{handle}` keys for the session.
+- `/sessions/{id}/messages` and `DELETE /sessions` return HTTP 403 if the authenticated user doesn't own the session.
+- Tool plugins that are user-scoped (`save_memory`, `read_memory`, all `personal_finance.*` plugins) read `user_id` from `context.user_id` rather than from tool arguments.
+
+**Keycloak service:**
+
+The `keycloak` Docker Compose service runs Keycloak 24 in dev mode (`start-dev --import-realm`), backed by the shared Postgres instance. On first start it imports `keycloak/realm-export.json`, which defines:
+
+- Realm `multi-tool-chat`
+- Client `frontend` — public client, PKCE flow, redirect URI `http://localhost:5173/*`
+
+The service image is built from `keycloak/Dockerfile`: a multi-stage build that compiles the Keycloakify React/Tailwind login theme into a `.jar` provider, then copies it into the official Keycloak image.
 
 ### 2.9 RAG Pipeline (mcp_documents microservice)
 
@@ -148,16 +180,17 @@ A cheaper/faster model (`claude-haiku-4-5` or `qwen2.5:7b`) is used for both map
 
 All state flows through one Redis instance:
 
-| Key pattern                  | Contents                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------- |
-| `session` (hash)             | Session metadata records                                                              |
-| `records:{session_id}` (set) | Handles belonging to a session                                                        |
-| `handles` (hash)             | `ToolResultRecord` JSON keyed by handle                                               |
-| `payload:{handle}`           | Raw tool output string                                                                |
-| LangGraph namespace          | Checkpoint data (managed by `AsyncRedisSaver`)                                        |
-| `llm_cache`                  | Semantic cache vectors (managed by `redisvl`)                                         |
-| Memory namespace             | Long-term user facts (managed by LangGraph `RedisStore`)                              |
-| `rag:queue` (list)           | RAG ingestion queue — `doc_id` UUIDs awaiting processing (managed by `mcp_documents`) |
+| Key pattern                     | Contents                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `session` (hash)                | Session metadata records (`SessionRecord` JSON, includes `user_id`)                   |
+| `user:{user_id}:sessions` (set) | Session IDs belonging to a Keycloak user; populated on session create/delete          |
+| `records:{session_id}` (set)    | Handles belonging to a session                                                        |
+| `handles` (hash)                | `ToolResultRecord` JSON keyed by handle                                               |
+| `payload:{handle}`              | Raw tool output string                                                                |
+| LangGraph namespace             | Checkpoint data (managed by `AsyncRedisSaver`)                                        |
+| `llm_cache`                     | Semantic cache vectors (managed by `redisvl`)                                         |
+| Memory namespace                | Long-term user facts (managed by LangGraph `RedisStore`)                              |
+| `rag:queue` (list)              | RAG ingestion queue — `doc_id` UUIDs awaiting processing (managed by `mcp_documents`) |
 
 Choosing Redis as the single store simplifies local development (one `docker compose up`) and eliminates the DynamoDB/S3 dependency that the original infrastructure modules reference. The `USE_AWS_STORE` flag in config preserves the option to switch.
 
@@ -208,7 +241,7 @@ The frontend assembles these events into the chat item list in `App.tsx`.
 
 **PostgreSQL** holds two datasets: personal finance data (credit cards, loans, income, expenses, savings transfers) and RAG document chunks with pgvector embeddings. Both are structured and relational, making a proper SQL database a better fit than Redis hashes.
 
-**Cost of Redis:** It is an in-memory store. Unbounded payload accumulation causes OOM. There are no TTLs on `payload:{handle}` keys. Deleting a session leaks payload keys (the `delete_session` path removes the session hash and records set, but not the payload keys — a known bug). A single Redis instance is also a single point of failure.
+**Cost of Redis:** It is an in-memory store. Unbounded payload accumulation causes OOM. There are no TTLs on `payload:{handle}` keys. `delete_session` now pipeline-deletes all `payload:{handle}` keys for the session (previously leaked). A single Redis instance is also a single point of failure.
 
 **Alternative not taken:** DynamoDB + S3 (the infrastructure modules reference this). It would give durable, scalable storage but adds operational complexity and cost for a development prototype.
 
@@ -289,16 +322,18 @@ The LangGraph graph (`_graph`) and checkpointer (`_checkpointer`) are module-lev
 
 ### 4.6 Authentication and Authorization
 
-**Current state:** No authentication. Any client that can reach the API can read, modify, or delete any session. Memory is keyed by a user-supplied string, allowing User A to overwrite User B's memory.
+**Implemented.** See §2.12. All routes (except `/health` and `/config`) are protected by Keycloak-issued JWTs. Sessions are user-scoped via `user:{user_id}:sessions` Redis sets. Tool plugins (`save_memory`, `read_memory`, all `personal_finance.*`) derive `user_id` from `context.user_id` (the JWT `sub`). Session ownership is enforced on `/sessions/{id}/messages` and `DELETE /sessions`.
 
-**Proposed design:** Add JWT-based auth middleware in FastAPI. Derive a `user_id` from the token. Scope all session, tool-result, and memory keys by `user_id`. Add a session ownership check on every session endpoint.
+**Remaining gap:** The embedded SQLite database (`sql_query`, `sql_ddl`, `sql_dml`) still has no per-user isolation — any authenticated user can read or mutate any table.
 
 ### 4.7 Redis Key Cleanup and TTL Policy
 
-**Current state:** `payload:{handle}` keys are never expired. `delete_session` does not delete payload keys. Over time, Redis memory grows without bound.
+**Partially implemented.** `delete_session` now pipeline-deletes all `payload:{handle}` keys for the session (fixed in the Keycloak auth commit). Remaining gaps:
 
-**Proposed fix:**
+- `payload:{handle}` keys still have no TTL — a session that is never deleted (the common case) accumulates payloads indefinitely.
+- LangGraph checkpoint keys have no TTL.
+
+**Proposed remaining fix:**
 
 - Set a TTL (e.g., 7 days) on `payload:{handle}` at write time.
-- In `delete_session`, pipeline-delete all `payload:{handle}` keys for the session in the same transaction.
 - Add TTLs to LangGraph checkpoint keys via a background cleanup job or by configuring `AsyncRedisSaver` with a retention policy.

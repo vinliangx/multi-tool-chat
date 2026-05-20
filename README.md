@@ -5,86 +5,94 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
 ## Architecture
 
 ```
-┌────────────┐  SSE  ┌───────────────────────────────┐
-│ React/Vite │──────▶│ FastAPI + LangGraph           │
-└────────────┘       │  ┌──────────────┐             │
-                     │  │SemanticCache │◀──────────┐ │
-                     │  └──────┬───────┘           │ │
-                     │         ▼                   │ │
-                     │  ┌──────────────┐           │ │
-                     │  │ Agent (LLM)  │◀─┐        │ │
-                     │  └──────┬───────┘  │        │ │
-                     │         ▼          │        │ │
-                     │  ┌──────────────┐  │        │ │
-                     │  │  Tool Node   │──┘        │ │
-                     │  │  http_fetch  │           │ │
-                     │  │  csv_s3      │           │ │
-                     │  │  image_read  │           │ │
-                     │  │  sql_query   │           │ │
-                     │  │  sql_ddl     │           │ │
-                     │  │  sql_dml     │           │ │
-                     │  │  weather_lookup          │ │
-                     │  │  recall      │           │ │
-                     │  │  save_memory │           │ │
-                     │  │  read_memory │           │ │
-                     │  │  personal_finance.*      │ │
-                     │  │  rag_upload  │           │ │
-                     │  │  rag_search  │           │ │
-                     │  │  rag_queue_status        │ │
-                     │  │  rag_list    │           │ │
-                     │  │  rag_delete  │           │ │
-                     │  │  doc_preview │           │ │
-                     │  └──────┬───────┘           │ │
-                     │         ▼                   │ │
-                     │  ┌──────────────┐           │ │
-                     │  │SessionManager│           │ │
-                     │  └──────┬───────┘           │ │
-                     └─────────┼───────────────────┘─┘
-                               ▼
-                             Redis
-                     (sessions, tool results,
-                      LangGraph checkpoints,
-                      semantic cache, memory store)
-                               ▲
-                               │ summarize when oversized
-                           ┌───┴────────┐
-                           │ Summarizer │ (Haiku / Ollama, map-reduce)
-                           └────────────┘
+┌────────────┐        ┌──────────────────────┐
+│ React/Vite │──login▶│ Keycloak (port 8080) │
+│ keycloak-js│        │ realm: multi-tool-chat│
+└─────┬──────┘        └──────────────────────┘
+      │ SSE + Bearer token
+      ▼
+┌───────────────────────────────┐
+│ FastAPI + LangGraph           │
+│  ┌──────────────┐             │
+│  │SemanticCache │◀──────────┐ │
+│  └──────┬───────┘           │ │
+│         ▼                   │ │
+│  ┌──────────────┐           │ │
+│  │ Agent (LLM)  │◀─┐        │ │
+│  └──────┬───────┘  │        │ │
+│         ▼          │        │ │
+│  ┌──────────────┐  │        │ │
+│  │  Tool Node   │──┘        │ │
+│  │  http_fetch  │           │ │
+│  │  csv_s3      │           │ │
+│  │  image_read  │           │ │
+│  │  sql_query   │           │ │
+│  │  sql_ddl     │           │ │
+│  │  sql_dml     │           │ │
+│  │  weather_lookup          │ │
+│  │  recall      │           │ │
+│  │  save_memory │           │ │
+│  │  read_memory │           │ │
+│  │  personal_finance.*      │ │
+│  │  rag_upload  │           │ │
+│  │  rag_search  │           │ │
+│  │  rag_queue_status        │ │
+│  │  rag_list    │           │ │
+│  │  rag_delete  │           │ │
+│  │  doc_preview │           │ │
+│  └──────┬───────┘           │ │
+│         ▼                   │ │
+│  ┌──────────────┐           │ │
+│  │SessionManager│           │ │
+│  └──────┬───────┘           │ │
+└─────────┼───────────────────┘─┘
+          ▼
+        Redis
+(sessions, tool results,
+ LangGraph checkpoints,
+ semantic cache, memory store)
+          ▲
+          │ summarize when oversized
+      ┌───┴────────┐
+      │ Summarizer │ (Haiku / Ollama, map-reduce)
+      └────────────┘
 
-                           ┌────────────┐
-                           │ S3 / Ninja │  (file uploads, csv_s3 reads)
-                           └────────────┘
+      ┌────────────┐
+      │ S3 / Ninja │  (file uploads, csv_s3 reads)
+      └────────────┘
 
-                           ┌────────────┐
-                           │ PostgreSQL │  (personal finance data,
-                           │            │   RAG document chunks)
-                           └────────────┘
+      ┌────────────┐
+      │ PostgreSQL │  (personal finance data,
+      │            │   RAG document chunks,
+      │            │   Keycloak tables)
+      └────────────┘
 
-                           ┌──────────────────────┐
-                           │ MCP Weather Service  │  port 8002 — weather_lookup
-                           └──────────────────────┘
+      ┌──────────────────────┐
+      │ MCP Weather Service  │  port 8002 — weather_lookup
+      └──────────────────────┘
 
-                           ┌──────────────────────┐
-                           │ MCP Documents Service│  port 8003 — rag_* + doc_preview
-                           │ (chunking + pgvector)│
-                           └──────────────────────┘
+      ┌──────────────────────┐
+      │ MCP Documents Service│  port 8003 — rag_* + doc_preview
+      │ (chunking + pgvector)│
+      └──────────────────────┘
 
-                           ┌──────────────────────┐
-                           │ MCP Finance Service  │  port 8004 — personal_finance.*
-                           │ (asyncpg + Postgres) │
-                           └──────────────────────┘
+      ┌──────────────────────┐
+      │ MCP Finance Service  │  port 8004 — personal_finance.*
+      │ (asyncpg + Postgres) │
+      └──────────────────────┘
 ```
 
 Key design choices:
 
+- **Keycloak authentication.** All routes except `/health` and `/config` require a JWT Bearer token issued by Keycloak. The backend validates tokens against Keycloak's JWKS endpoint (with a 5-minute cache and automatic key-rotation refresh). Sessions, tool results, and memory are scoped by the authenticated user's `sub` claim. The frontend uses `keycloak-js` with `onLoad: "login-required"`, injecting the Bearer token on every API call via `apiFetch()`.
 - **Micro kernel architecture.** Tools are `ToolPlugin` subclasses registered with `ToolKernel`. The kernel dispatches calls through `ToolMiddleware` (logging, error handling) before reaching the plugin, then pipes results through `ResultProcessor` for truncation/summarization. Adding a new tool means subclassing `ToolPlugin` and appending to `ALL_PLUGINS`.
 - **`ResultProcessor` owns the truncation policy.** Every tool routes its output through `ResultProcessor.process()`. Results ≤4,000 tokens are returned inline; oversized results are summarized and persisted, with only `{handle, summary, size, ...}` returned to the agent.
 - **`recall(handle)` is an explicit tool.** The agent decides when to bring full content back. This satisfies the requirement: "use metadata from stored results to decide whether a result should be brought back into the context window."
 - **Summarizer is map-reduce.** Truly large payloads are chunked via `RecursiveCharacterTextSplitter`, summarized per chunk, then reduced. Progress events are streamed to the UI during summarization.
 - **Semantic cache.** Redis-backed `SemanticCache` with vector embeddings de-duplicates repeated queries across sessions (shared cache, distance threshold 0.09, 5-minute TTL), returning cached responses without hitting the LLM. Requires Ollama (`LLM_PROVIDER=ollama`) — silently disabled when using Anthropic because Anthropic has no first-party embedding API in LangChain.
 - **Redis is the single backing store.** Session metadata, tool-result payloads, LangGraph checkpoints, the semantic cache, and the long-term memory store all live in Redis — no DynamoDB required.
-- **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis.
-- **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported.
+- **Long-term memory tools.** `save_memory` and `read_memory` persist user facts, likes, and dislikes across sessions via Redis, scoped by the authenticated user's ID.
+- **Vision LLM.** A dedicated vision model (Anthropic or Ollama) handles image analysis. The `image_read` tool reads an image from S3, base64-encodes it, and sends it to the vision LLM with a user prompt — OCR is supported. PDFs that fail text extraction fall back to the vision model automatically.
 - **Context usage tracking.** The agent estimates token usage via `tiktoken` and exposes it through `/config`. A `ContextUsageBadge` in the UI shows current vs. limit tokens in real time.
 - **Personal finance suite.** Nine tools under the `personal_finance.*` namespace track credit cards, loans, income, expenses, savings transfers, and monthly reports. The backend plugins are thin proxies — all DB logic lives in `mcp_personal_finance` (port 8004), a standalone FastMCP microservice that owns the Postgres schema and `asyncpg` pool.
 - **MCP microservice tools.** Three standalone FastMCP services extend the tool set via the MCP protocol. `mcp_weather_service` (port 8002) handles geocoding and returns weather data; `mcp_documents` (port 8003) provides RAG capabilities — document chunking, pgvector-based embedding storage, Redis-backed ingestion queue, document listing/deletion, and document preview; `mcp_personal_finance` (port 8004) owns all personal-finance database access. All three are called by `ToolPlugin` subclasses using `fastmcp.client.Client` with `StreamableHttpTransport`, keeping the kernel and middleware unchanged.
@@ -97,6 +105,7 @@ Key design choices:
 backend/        Python (FastAPI + LangGraph), Pants targets
   src/app/
     api/        HTTP routes (SSE chat stream, session CRUD, upload_url)
+    auth/       JWT validation — JWKS cache, get_current_user dep
     agent/      LangGraph graph, summarizer, semantic cache, vectorizer
     session/    Session store + models (RedisSessionStore)
     tools/
@@ -120,9 +129,16 @@ backend/        Python (FastAPI + LangGraph), Pants targets
   Dockerfile
 frontend/       React + Vite + TS chat UI
   src/
+    keycloak.ts keycloak-js instance (url/realm/clientId from env)
+    api.ts      apiFetch() — auto-injects Bearer token
     components/ NavSideBar, Header, ChatBox, FileUpload, FileItem,
                 BubbleUser, BubbleAssistant, BubbleTool, BubbleReasoning,
                 ChatLoadingIndicator, ConfirmDialog, ContextUsageBadge
+keycloak/
+  Dockerfile            Multi-stage build: compile Keycloakify theme → Keycloak image
+  realm-export.json     Realm config imported on first start (multi-tool-chat realm,
+                        frontend client, public PKCE flow)
+  keycloakify/          React/Vite/Tailwind custom login theme (built with Keycloakify)
 services/
   mcp_weather_service/      FastMCP (port 8002) — get_weather tool
   mcp_documents/            FastMCP (port 8003) — RAG: chunking, pgvector storage,
@@ -231,27 +247,40 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 
 ## Required env (backend)
 
-| Variable                                     | Purpose                                                                          |
-| -------------------------------------------- | -------------------------------------------------------------------------------- |
-| `LLM_PROVIDER`                               | `anthropic` (default) or `ollama`                                                |
-| `ANTHROPIC_API_KEY`                          | LLM access when `LLM_PROVIDER=anthropic`                                         |
-| `MODEL_NAME`                                 | Override main LLM (default: `claude-sonnet-4-6`)                                 |
-| `SUMMARIZER_MODEL`                           | Override summarizer (default: `claude-haiku-4-5-20251001`)                       |
-| `OLLAMA_BASE_URL`                            | Ollama server URL (default: `http://localhost:11434`)                            |
-| `OLLAMA_MODEL`                               | Ollama chat model (default: `qwen2.5:7b`)                                        |
-| `OLLAMA_SUMMARIZER_MODEL`                    | Ollama summarizer model                                                          |
-| `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)            |
-| `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                 |
-| `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                      |
-| `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `chat_app_passw0rd`)       |
-| `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                          |
-| `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                 |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                   |
-| `BUCKET_NAME`                                | S3 bucket for file uploads                                                       |
-| `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)           |
-| `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)          |
-| `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)  |
-| `FINANCE_SERVICE_URL`                        | URL for the MCP personal-finance microservice (default: `http://localhost:8004`) |
+| Variable                                     | Purpose                                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                               | `anthropic` (default) or `ollama`                                                   |
+| `ANTHROPIC_API_KEY`                          | LLM access when `LLM_PROVIDER=anthropic`                                            |
+| `MODEL_NAME`                                 | Override main LLM (default: `claude-sonnet-4-6`)                                    |
+| `SUMMARIZER_MODEL`                           | Override summarizer (default: `claude-haiku-4-5-20251001`)                          |
+| `OLLAMA_BASE_URL`                            | Ollama server URL (default: `http://localhost:11434`)                               |
+| `OLLAMA_MODEL`                               | Ollama chat model (default: `qwen2.5:7b`)                                           |
+| `OLLAMA_SUMMARIZER_MODEL`                    | Ollama summarizer model                                                             |
+| `OLLAMA_EMBEDDING_MODEL`                     | Ollama embedding model for semantic cache (default: `embeddinggemma`)               |
+| `OLLAMA_VISION_MODEL`                        | Ollama vision model (default: `qwen3-vl:latest`)                                    |
+| `REDIS_URL`                                  | Redis connection string (default: `redis://localhost:6379`)                         |
+| `POSTGRES_PASSWORD`                          | PostgreSQL password (used by Docker Compose, default: `chat_app_passw0rd`)          |
+| `KEYCLOAK_EXTERNAL_URL`                      | Keycloak URL reachable from the browser (default: `http://localhost:8080`)          |
+| `KEYCLOAK_INTERNAL_URL`                      | Keycloak URL reachable from the backend container (default: `http://keycloak:8080`) |
+| `KEYCLOAK_REALM`                             | Keycloak realm name (default: `multi-tool-chat`)                                    |
+| `KEYCLOAK_CLIENT_ID`                         | OIDC client ID (default: `frontend`)                                                |
+| `KC_ADMIN` / `KC_ADMIN_PASSWORD`             | Keycloak admin credentials (Docker Compose only, defaults: `admin` / `admin`)       |
+| `EXTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the browser (presigned URLs)                             |
+| `INTERNAL_S3_ENDPOINT_URL`                   | S3 endpoint reachable from the backend container                                    |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 credentials                                                                      |
+| `BUCKET_NAME`                                | S3 bucket for file uploads                                                          |
+| `USE_AWS_STORE`                              | `1` to use DynamoDB+S3 for session/tool-result storage (unset = Redis)              |
+| `WEATHER_SERVICE_URL`                        | URL for the MCP weather microservice (default: `http://localhost:8002`)             |
+| `RAG_SERVICE_URL`                            | URL for the MCP documents / RAG microservice (default: `http://localhost:8003`)     |
+| `FINANCE_SERVICE_URL`                        | URL for the MCP personal-finance microservice (default: `http://localhost:8004`)    |
+
+### Frontend env (Vite)
+
+| Variable                  | Purpose                                                         |
+| ------------------------- | --------------------------------------------------------------- |
+| `VITE_KEYCLOAK_URL`       | Keycloak URL for the browser (default: `http://localhost:8080`) |
+| `VITE_KEYCLOAK_REALM`     | Keycloak realm (default: `multi-tool-chat`)                     |
+| `VITE_KEYCLOAK_CLIENT_ID` | OIDC client ID (default: `frontend`)                            |
 
 ## Tool reference
 
@@ -285,7 +314,8 @@ aws s3 sync dist/ s3://mtc-dev-frontend/
 
 ## Frontend features
 
-- **Multi-session sidebar** — create, switch, and delete chat sessions; history reloads from Redis on selection.
+- **Authentication** — the app gates behind Keycloak login (`onLoad: "login-required"`). Every API call automatically includes a `Bearer` token via `apiFetch()`. The token is silently refreshed every 60 seconds. The header shows the logged-in username and a Logout button.
+- **Multi-session sidebar** — create, switch, and delete chat sessions; sessions are scoped to the authenticated user; history reloads from Redis on selection.
 - **Tool call bubbles** — each tool invocation shows its name; click the bubble to expand arguments and result.
 - **Reasoning bubbles** — extended thinking tokens are surfaced in a collapsible bubble; a global checkbox in the chat bar keeps all reasoning bubbles expanded or collapsed.
 - **Cache badge** — assistant messages show whether the response came from the LLM or the semantic cache (Ollama only).
