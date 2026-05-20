@@ -178,6 +178,17 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
 
         if ext in _IMAGE_EXTS:
             text = await _describe_image(data, ext)
+        elif ext in _PDF_EXTS:
+            text = _extract_text(data, ext)
+            if not text.strip():
+                import fitz
+
+                doc = fitz.open(stream=data, filetype="pdf")
+                parts = []
+                for page in doc:
+                    pix = page.get_pixmap(dpi=150)
+                    parts.append(await _describe_image(pix.tobytes("png"), ".png"))
+                text = "\n".join(parts)
         else:
             text = _extract_text(data, ext)
 
