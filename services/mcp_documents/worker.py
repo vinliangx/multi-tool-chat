@@ -52,6 +52,10 @@ def _download(s3_url: str) -> bytes:
     return obj["Body"].read()
 
 
+async def _download_async(s3_url: str) -> bytes:
+    return await asyncio.to_thread(_download, s3_url)
+
+
 def _extract_text(data: bytes, ext: str) -> str:
     if ext in _TEXT_EXTS:
         return data.decode("utf-8", errors="replace")
@@ -168,7 +172,7 @@ async def _get_s3_url(doc_id: uuid.UUID) -> str:
 async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
     await db.update_document_status(doc_id, "processing")
     try:
-        data = _download(s3_url)
+        data = await _download_async(s3_url)
         ext = Path(s3_url.rstrip("/").split("/")[-1]).suffix.lower()
 
         if ext in _IMAGE_EXTS:
@@ -190,8 +194,9 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
         metadata_list = [
             {
                 "parent_text": text[
-                    max(0, c["start_index"] - parent_ctx // 2)
-                    : c["start_index"] + settings.chunk_size + parent_ctx // 2
+                    max(0, c["start_index"] - parent_ctx // 2) : c["start_index"]
+                    + settings.chunk_size
+                    + parent_ctx // 2
                 ]
             }
             for c in chunks
@@ -204,19 +209,39 @@ async def process_document(doc_id: uuid.UUID, s3_url: str) -> None:
         await db.update_document_status(doc_id, "failed", error=str(exc))
 
 
+async def _run_with_semaphore(
+    doc_id: uuid.UUID, s3_url: str, sem: asyncio.Semaphore
+) -> None:
+    try:
+        await process_document(doc_id, s3_url)
+    finally:
+        sem.release()
+
+
 async def worker_loop() -> None:
-    log.info("RAG worker started")
+    log.info("RAG worker started (concurrency=%d)", settings.worker_concurrency)
+    sem = asyncio.Semaphore(settings.worker_concurrency)
+    tasks: set[asyncio.Task] = set()
+
     while True:
         try:
+            await sem.acquire()
             job_id = await rag_queue.dequeue_timeout(timeout=5)
             if job_id is None:
+                sem.release()
                 continue
             doc_id = uuid.UUID(job_id)
             s3_url = await _get_s3_url(doc_id)
-            await process_document(doc_id, s3_url)
+            t = asyncio.create_task(_run_with_semaphore(doc_id, s3_url, sem))
+            tasks.add(t)
+            t.add_done_callback(tasks.discard)
         except asyncio.CancelledError:
+            sem.release()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
             log.info("RAG worker stopped")
             break
         except Exception as exc:
+            sem.release()
             log.error("Worker loop error: %s", exc)
             await asyncio.sleep(1)

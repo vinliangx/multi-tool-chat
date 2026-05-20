@@ -26,7 +26,7 @@ Roughly 30-40% of the way to production. Right architectural bones, but signific
 
 ### Reliability
 
-- [ ] **Concurrency** — single worker processes one doc at a time; add a parallelism setting
+- [x] **Concurrency** — single worker processes one doc at a time; add a parallelism setting
 - [ ] **Retry for failed docs** — failed docs stay permanently unusable; a transient Ollama timeout should be retryable
 - [ ] **Deduplication** — uploading the same `s3_url` twice silently creates duplicate index entries
 - [ ] **Batch embeddings** — `worker.py:143` fires one HTTP request per chunk via `asyncio.gather`; Ollama's `/api/embed` supports batching

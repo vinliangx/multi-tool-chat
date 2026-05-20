@@ -24,11 +24,13 @@ class Settings(BaseSettings):
     embedding_model: str = "embeddinggemma:latest"
     embedding_dimensions: int = 768
 
-    chunk_size: int = 1000
+    chunk_size: int = 400
     chunk_overlap: int = 200
 
     use_reranker: bool = False
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    worker_concurrency: int = 3
 
 
 settings = Settings()
