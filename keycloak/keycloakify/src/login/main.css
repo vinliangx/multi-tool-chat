@@ -21,6 +21,7 @@ body.kcBodyClass {
     @apply rounded-xl bg-linear-to-r from-blue-500 via-blue-600 to-blue-700 px-4 py-2.5;
     @apply text-center text-sm leading-5 font-medium text-white;
     @apply hover:bg-linear-to-br focus:ring-4 focus:ring-blue-300 focus:outline-none dark:focus:ring-blue-800;
+    @apply shadow-md shadow-blue-800;
 }
 
 .kcInfoAreaWrapperClass {
@@ -42,11 +43,9 @@ body.kcBodyClass {
     .kcFormPasswordVisibilityButtonClass {
         @apply mx-4 justify-center;
     }
-    .kcFormPasswordVisibilityIconHide {
-        @apply text-[130%];
-    }
+    .kcFormPasswordVisibilityIconHide,
     .kcFormPasswordVisibilityIconShow {
-        @apply text-[130%];
+        @apply text-[130%] text-blue-900;
     }
 }
 #kc-info-wrapper {
