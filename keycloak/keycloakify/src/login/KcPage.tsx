@@ -39,4 +39,12 @@ export default function KcPage(props: { kcContext: KcContext }) {
     );
 }
 
-const classes = {} satisfies { [key in ClassKey]?: string };
+const classes = {
+    kcInputClass: "",
+    kcFormPasswordVisibilityButtonClass: "",
+    kcInputGroup: "",
+    kcHtmlClass: "",
+    kcBodyClass: "",
+    kcLabelClass: "",
+    kcSignUpClass: ""
+} satisfies { [key in ClassKey]?: string };

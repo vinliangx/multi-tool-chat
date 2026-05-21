@@ -3,8 +3,12 @@
 
 @tailwind utilities;
 
+html {
+    @apply w-full h-screen;
+}
+
 body.kcBodyClass {
-    @apply bg-radial-[at_bottom_left] from-slate-900 via-slate-800 to-black;
+    @apply bg-radial-[at_bottom_left] from-slate-900 via-slate-800 to-black h-screen bg-transparent;
 }
 
 .kcFormCardClass {
@@ -24,14 +28,27 @@ body.kcBodyClass {
 }
 
 .kcInputClass {
+    @apply w-full h-10;
     @apply ring ring-gray-200 border-none rounded-md;
     @apply bg-gray-100 inset-shadow-xs inset-shadow-slate-700;
+    @apply px-4 outline-none;
 }
 
-.kcFormPasswordVisibilityButtonClass {
-    @apply ml-2;
+.kcInputGroup {
+    @apply flex;
+    label {
+        @apply font-bold text-slate-900;
+    }
+    .kcFormPasswordVisibilityButtonClass {
+        @apply mx-4 justify-center;
+    }
+    .kcFormPasswordVisibilityIconHide {
+        @apply text-[130%];
+    }
+    .kcFormPasswordVisibilityIconShow {
+        @apply text-[130%];
+    }
 }
-
 #kc-info-wrapper {
-    @apply bg-radial-[at_bottom_left] from-gray-400 via-slate-300 to-gray-300;
+    @apply bg-radial-[at_bottom_left] from-gray-400 via-slate-300 to-gray-300 border-t border-t-gray-400 justify-items-center;
 }
