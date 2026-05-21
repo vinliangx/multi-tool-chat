@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ollama_summarizer_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "embeddinggemma"
     ollama_vision_model: str = "qwen3-vl:latest"
+    ollama_reasoning: bool = False
 
     aws_region: str = "us-east-1"
     sessions_table: str = "chat-sessions"

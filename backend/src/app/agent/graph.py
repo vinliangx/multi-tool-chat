@@ -13,7 +13,7 @@ recall handle if it wants the raw bytes.
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, AsyncIterator, Literal, TypedDict
+from typing import Annotated, AsyncIterator, TypedDict
 
 import tiktoken
 from langchain_core.language_models import BaseChatModel
@@ -50,9 +50,13 @@ def _estimate_tokens(messages: list[AnyMessage]) -> int:
         if isinstance(content, str):
             total += len(_enc.encode(content))
         elif isinstance(content, list):
-            for part in content:
-                if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    total += len(_enc.encode(part["text"]))
+            text = " ".join(
+                part["text"]
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            )
+            if text:
+                total += len(_enc.encode(text))
     return total
 
 
@@ -99,6 +103,8 @@ cache: SemanticCache | None = (
 
 
 def _inject_file_urls(messages: list[AnyMessage]) -> list[AnyMessage]:
+    if not any(isinstance(m, HumanMessage) and m.additional_kwargs.get("files") for m in messages):
+        return messages
     out = []
     for msg in messages:
         files = (
@@ -141,23 +147,18 @@ async def _agent_node(state: AgentState) -> dict:
     }
 
 
-def _route_after_agent(state: AgentState) -> Literal["tools", "cache_store"]:
-    last = state["messages"][-1]
-    if isinstance(last, AIMessage) and last.tool_calls:
-        return "tools"
-    return "cache_store"
-
-
-def _route_after_agent_no_cache(state: AgentState) -> Literal["tools"] | str:
-    last = state["messages"][-1]
-    if isinstance(last, AIMessage) and last.tool_calls:
-        return "tools"
-    return END
+def _make_route_after_agent(fallback: str):
+    def _route(state: AgentState) -> str:
+        last = state["messages"][-1]
+        if isinstance(last, AIMessage) and last.tool_calls:
+            return "tools"
+        return fallback
+    return _route
 
 
 def _cache_lookup_node(state: AgentState):
     prompt = state["messages"][-1].content
-    cached = cache.check(prompt=f"{prompt}", distance_threshold=0.09)
+    cached = cache.check(prompt=prompt)
     if cached:
         return {
             "messages": [
@@ -188,7 +189,7 @@ def _cache_store_node(state: AgentState):
 
     if not prompt or not assistant_msg:
         return {}
-    cache.store(prompt=f"{prompt}", response=assistant_msg)
+    cache.store(prompt=prompt, response=assistant_msg)
     return {}
 
 
@@ -214,14 +215,14 @@ def _build_graph(checkpointer: BaseCheckpointSaver):
         )
         g.add_conditional_edges(
             "agent",
-            _route_after_agent,
+            _make_route_after_agent("cache_store"),
             {"tools": "tools", "cache_store": "cache_store"},
         )
         g.add_edge("cache_store", END)
     else:
         g.add_edge(START, "agent")
         g.add_conditional_edges(
-            "agent", _route_after_agent_no_cache, {"tools": "tools", END: END}
+            "agent", _make_route_after_agent(END), {"tools": "tools", END: END}
         )
 
     return g.compile(checkpointer=checkpointer)
@@ -249,8 +250,7 @@ async def _get_graph():
 async def delete_session_checkpoints(session_id: str) -> None:
     """Remove all LangGraph checkpoint data for a session."""
     await _get_graph()
-    if _checkpointer is not None:
-        await _checkpointer.adelete_thread(session_id)
+    await _checkpointer.adelete_thread(session_id)
 
 
 async def get_session_messages(session_id: str) -> list[AnyMessage]:
@@ -263,8 +263,76 @@ async def get_session_messages(session_id: str) -> list[AnyMessage]:
     return checkpoint_tuple.checkpoint.get("channel_values", {}).get("messages", [])
 
 
+def _process_graph_event(stream_type: str, event) -> list[dict]:
+    out = []
+    if stream_type == "messages":
+        msg_chunk, metadata = event
+        if (
+            isinstance(msg_chunk, AIMessageChunk)
+            and isinstance(msg_chunk.content, str)
+            and msg_chunk.content
+            and metadata.get("langgraph_node") == "agent"
+        ):
+            out.append({"type": "token", "data": {"content": msg_chunk.content}})
+        elif (
+            isinstance(msg_chunk, AIMessageChunk)
+            and isinstance(msg_chunk.content, str)
+            and "reasoning_content" in msg_chunk.additional_kwargs
+        ):
+            out.append(
+                {
+                    "type": "reasoning_token",
+                    "data": {
+                        "content": msg_chunk.additional_kwargs["reasoning_content"]
+                    },
+                }
+            )
+    elif stream_type == "updates":
+        for node_name, update in event.items():
+            if update is not None:
+                for msg in update.get("messages", []):
+                    if isinstance(msg, AIMessage):
+                        for tc in msg.tool_calls or []:
+                            out.append(
+                                {
+                                    "type": "tool_call",
+                                    "data": {
+                                        "id": tc["id"],
+                                        "name": tc["name"],
+                                        "args": tc["args"],
+                                    },
+                                }
+                            )
+                        if msg.content:
+                            out.append(
+                                {
+                                    "type": "message",
+                                    "data": {
+                                        "role": "assistant",
+                                        "content": msg.content,
+                                        "source": "CACHE"
+                                        if node_name == "cache_lookup"
+                                        else "LLM",
+                                    },
+                                }
+                            )
+                    elif isinstance(msg, ToolMessage):
+                        out.append(
+                            {
+                                "type": "tool_result",
+                                "data": {
+                                    "tool_call_id": msg.tool_call_id,
+                                    "content": msg.content,
+                                },
+                            }
+                        )
+            if node_name == "agent" and update.get("last_usage"):
+                out.append({"type": "usage", "data": update["last_usage"]})
+    return out
+
+
 async def run_agent_stream(
-    session_id: str, user_message: str, files: list[dict] | None, user_id: str = ""
+    session_id: str, user_message: str, files: list[dict] | None, user_id: str
 ) -> AsyncIterator[dict]:
     """Yield events from a single chat turn.
 
@@ -308,74 +376,6 @@ async def run_agent_stream(
         await event_queue.put(("done", None))
 
     feed_task = asyncio.create_task(_feed())
-
-    def _process_graph_event(stream_type: str, event):
-        """Convert a raw graph event into zero or more yield-able dicts."""
-        out = []
-        if stream_type == "messages":
-            msg_chunk, metadata = event
-            if (
-                isinstance(msg_chunk, AIMessageChunk)
-                and isinstance(msg_chunk.content, str)
-                and msg_chunk.content
-                and metadata.get("langgraph_node") == "agent"
-            ):
-                out.append({"type": "token", "data": {"content": msg_chunk.content}})
-            elif (
-                isinstance(msg_chunk, AIMessageChunk)
-                and isinstance(msg_chunk.content, str)
-                and "reasoning_content" in msg_chunk.additional_kwargs
-            ):
-                out.append(
-                    {
-                        "type": "reasoning_token",
-                        "data": {
-                            "content": msg_chunk.additional_kwargs["reasoning_content"]
-                        },
-                    }
-                )
-        elif stream_type == "updates":
-            for node_name, update in event.items():
-                if update is not None:
-                    for msg in update.get("messages", []):
-                        if isinstance(msg, AIMessage):
-                            for tc in msg.tool_calls or []:
-                                out.append(
-                                    {
-                                        "type": "tool_call",
-                                        "data": {
-                                            "id": tc["id"],
-                                            "name": tc["name"],
-                                            "args": tc["args"],
-                                        },
-                                    }
-                                )
-                            if msg.content:
-                                out.append(
-                                    {
-                                        "type": "message",
-                                        "data": {
-                                            "role": "assistant",
-                                            "content": msg.content,
-                                            "source": "CACHE"
-                                            if node_name == "cache_lookup"
-                                            else "LLM",
-                                        },
-                                    }
-                                )
-                        elif isinstance(msg, ToolMessage):
-                            out.append(
-                                {
-                                    "type": "tool_result",
-                                    "data": {
-                                        "tool_call_id": msg.tool_call_id,
-                                        "content": msg.content,
-                                    },
-                                }
-                            )
-                if node_name == "agent" and update.get("last_usage"):
-                    out.append({"type": "usage", "data": update["last_usage"]})
-        return out
 
     try:
         while True:

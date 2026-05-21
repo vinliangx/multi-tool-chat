@@ -20,7 +20,9 @@ def build_chat_llm() -> BaseChatModel:
     if settings.llm_provider == "anthropic":
         return _build_antropic(model_name=settings.model_name, tokens=2048)
     elif settings.llm_provider == "ollama":
-        return _build_ollama(model_name=settings.ollama_model, reasoning=True)
+        return _build_ollama(
+            model_name=settings.ollama_model, reasoning=settings.ollama_reasoning
+        )
 
 
 def build_summarizer_llm() -> BaseChatModel:
