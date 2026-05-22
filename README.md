@@ -4,82 +4,41 @@ Full-stack chat application where a LangGraph agent invokes multiple tools, with
 
 ## Architecture
 
-```
-┌────────────┐        ┌──────────────────────┐
-│ React/Vite │──login▶│ Keycloak (port 8080) │
-│ keycloak-js│        │ realm: multi-tool-chat│
-└─────┬──────┘        └──────────────────────┘
-      │ SSE + Bearer token
-      ▼
-┌───────────────────────────────┐
-│ FastAPI + LangGraph           │
-│  ┌──────────────┐             │
-│  │SemanticCache │◀──────────┐ │
-│  └──────┬───────┘           │ │
-│         ▼                   │ │
-│  ┌──────────────┐           │ │
-│  │ Agent (LLM)  │◀─┐        │ │
-│  └──────┬───────┘  │        │ │
-│         ▼          │        │ │
-│  ┌──────────────┐  │        │ │
-│  │  Tool Node   │──┘        │ │
-│  │  http_fetch  │           │ │
-│  │  csv_s3      │           │ │
-│  │  image_read  │           │ │
-│  │  sql_query   │           │ │
-│  │  sql_ddl     │           │ │
-│  │  sql_dml     │           │ │
-│  │  weather_lookup          │ │
-│  │  recall      │           │ │
-│  │  save_memory │           │ │
-│  │  read_memory │           │ │
-│  │  personal_finance.*      │ │
-│  │  rag_upload  │           │ │
-│  │  rag_search  │           │ │
-│  │  rag_queue_status        │ │
-│  │  rag_list    │           │ │
-│  │  rag_delete  │           │ │
-│  │  doc_preview │           │ │
-│  └──────┬───────┘           │ │
-│         ▼                   │ │
-│  ┌──────────────┐           │ │
-│  │SessionManager│           │ │
-│  └──────┬───────┘           │ │
-└─────────┼───────────────────┘─┘
-          ▼
-        Redis
-(sessions, tool results,
- LangGraph checkpoints,
- semantic cache, memory store)
-          ▲
-          │ summarize when oversized
-      ┌───┴────────┐
-      │ Summarizer │ (Haiku / Ollama, map-reduce)
-      └────────────┘
+```mermaid
+graph TB
+    Browser["React / Vite<br/>keycloak-js"]
+    KC["Keycloak :8080<br/>realm: multi-tool-chat"]
 
-      ┌────────────┐
-      │ S3 / Ninja │  (file uploads, csv_s3 reads)
-      └────────────┘
+    Browser -->|login| KC
+    Browser -->|SSE + Bearer token| FastAPI
 
-      ┌────────────┐
-      │ PostgreSQL │  (personal finance data,
-      │            │   RAG document chunks,
-      │            │   Keycloak tables)
-      └────────────┘
+    subgraph FastAPI["FastAPI + LangGraph"]
+        direction TB
+        SC["Semantic Cache"]
+        Agent["Agent LLM"]
+        ToolNode["Tool Node<br/>http_fetch · csv_s3 · image_read<br/>sql_query · sql_ddl · sql_dml<br/>weather_lookup · recall<br/>save_memory · read_memory<br/>personal_finance.* · rag_*<br/>doc_preview"]
+        SessionMgr["Session Manager"]
 
-      ┌──────────────────────┐
-      │ MCP Weather Service  │  port 8002 — weather_lookup
-      └──────────────────────┘
+        SC --> Agent
+        Agent --> ToolNode
+        ToolNode -->|loop| Agent
+        ToolNode --> SessionMgr
+        SessionMgr -->|cache store| SC
+    end
 
-      ┌──────────────────────┐
-      │ MCP Documents Service│  port 8003 — rag_* + doc_preview
-      │ (chunking + pgvector)│
-      └──────────────────────┘
+    SessionMgr --> Redis[("Redis<br/>sessions · tool results<br/>LangGraph checkpoints<br/>semantic cache · memory")]
+    Redis -->|summarize oversized| Summarizer["Summarizer<br/>Haiku / Ollama, map-reduce"]
+    Summarizer --> Redis
 
-      ┌──────────────────────┐
-      │ MCP Finance Service  │  port 8004 — personal_finance.*
-      │ (asyncpg + Postgres) │
-      └──────────────────────┘
+    ToolNode -->|weather_lookup| Weather["MCP Weather Service<br/>port 8002"]
+    ToolNode -->|"rag_* · doc_preview"| Docs["MCP Documents Service<br/>port 8003, chunking + pgvector"]
+    ToolNode -->|"personal_finance.*"| Finance["MCP Finance Service<br/>port 8004, asyncpg + Postgres"]
+
+    FastAPI <-.->|"csv_s3 · image_read"| S3[("S3 / Ninja<br/>file uploads")]
+    Browser -.->|file upload| S3
+
+    Docs --> PG[("PostgreSQL<br/>RAG chunks · finance data<br/>Keycloak tables")]
+    Finance --> PG
 ```
 
 Key design choices:
