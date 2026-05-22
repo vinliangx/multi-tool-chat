@@ -41,9 +41,9 @@ services:
     ports:
       - "9444:9000"
     volumes:
-      - ./s3data:/data
-      - ./s3data/multipart:/home/sirius/multipart
-      - ./s3data/s3ninja-logs:/home/sirius/logs
+      - s3ninja-data:/data
+      - s3ninja-data:/home/sirius/data
+      - s3ninja-data:/home/sirius/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/ui"]
       interval: 30s
@@ -235,3 +235,4 @@ services:
 volumes:
   redis-data:
   postgres-data:
+  s3ninja-data:
