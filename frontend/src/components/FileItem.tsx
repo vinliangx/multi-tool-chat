@@ -14,12 +14,12 @@ export default function FileItem({ file, onRemove }: FileItemArgs) {
     message: string;
   } | null>(null);
   return (
-    <div className="file-item">
-      {file.name}
+    <div className="file-item group">
+      <span className="text">{file.name}</span>
       {onRemove && (
         <FontAwesomeIcon
           icon={faClose}
-          className="ml-1 cursor-pointer"
+          className="icon"
           onClick={() =>
             setConfirm({ message: "Do you want to remove this file?" })
           }
@@ -35,6 +35,7 @@ export default function FileItem({ file, onRemove }: FileItemArgs) {
           onCancel={() => setConfirm(null)}
         />
       )}
+      <div className="tooltip">{file.name}</div>
     </div>
   );
 }

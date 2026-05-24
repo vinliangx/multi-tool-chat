@@ -47,7 +47,8 @@ main {
 }
 /* scrollable messages area — flex-1 so chat-box-wrapper stays pinned at bottom */
 .chat-messages {
-  @apply flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
+  @apply flex-1 overflow-y-auto p-2 sm:p-3 md:p-4;
+  @apply [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
   @apply rounded-bl-4xl bg-transparent;
 }
 
@@ -74,9 +75,25 @@ main {
       }
     }
     .files-selected {
-      @apply flex gap-2;
+      @apply mb-4 grid grid-flow-row-dense grid-cols-4 gap-2 overflow-auto;
+      @apply [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
+      @apply hover:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-transparent;
       .file-item {
-        @apply mb-2 rounded-xs bg-amber-300 px-2 text-[80%] font-bold text-black;
+        @apply flex rounded-md bg-amber-300 px-2 text-[80%] font-bold text-black;
+        @apply relative;
+        .text {
+          @apply cursor-default overflow-hidden text-ellipsis whitespace-nowrap;
+          @apply hover:text-amber-900;
+        }
+        .icon {
+          @apply ml-1 cursor-pointer self-center;
+        }
+        .tooltip {
+          @apply pointer-events-none fixed z-50 mb-2 -translate-y-8 rounded bg-gray-800;
+          @apply shadow ring shadow-black ring-gray-500;
+          @apply px-2 py-1 text-sm text-white opacity-0 shadow-lg transition-opacity duration-300;
+          @apply group-hover:opacity-100;
+        }
       }
     }
     .chat-box-send {

@@ -69,21 +69,21 @@ export default function FileUpload({ filesUploaded, setBusy }: FileUploadArgs) {
     }
   }
   return (
-    <div className="relative flex-col self-center" ref={menuRef}>
+    <div className="relative z-20 flex-col self-center" ref={menuRef}>
       {/* Popup Menu Content */}
       {isOpen && (
         <div className="float absolute mt-2 rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-800 sm:-top-30 sm:left-0 md:-top-30 md:-left-20">
           <ul className="gap-20">
-            <li className="px-4 py-2 text-slate-400">Options</li>
+            <li className="px-4 py-2 text-sm text-slate-400">Options</li>
             <li className="py-3">
               <button
-                className="mx-2 flex w-60 rounded-full bg-slate-800 px-4 py-2 text-left hover:cursor-pointer hover:bg-slate-700"
+                className="mx-2 flex w-60 rounded-full bg-slate-800 px-4 py-2 text-left text-sm hover:cursor-pointer hover:bg-slate-700"
                 onClick={() => {
                   fileInputRef.current?.click();
                 }}
               >
                 <FontAwesomeIcon icon={faPaperclip} className="mr-4" />
-                Upload file
+                Upload file(s)
                 {isUploading && (
                   <div className="ml-5 flex items-center">
                     <ThreeDot

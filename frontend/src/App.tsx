@@ -91,7 +91,8 @@ export function App() {
     if (!input.trim() || busy) return;
     if (files && files.length > 0) {
       textMessages.push(
-        "\n\nAttached Files: " + files.map((f) => `**${f.name}**`).join(","),
+        "\n\nAttached Files:\n\n" +
+          files.map((f) => `- **${f.name}**\n`).join(""),
       );
     }
     abortRef.current?.abort();
