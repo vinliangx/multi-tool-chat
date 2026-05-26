@@ -28,6 +28,7 @@ from app.tools.plugins.rag_delete import RagDeletePlugin
 from app.tools.plugins.rag_list import RagListPlugin
 from app.tools.plugins.rag_search import RagSearchPlugin
 from app.tools.plugins.rag_status import RagStatusPlugin
+from app.tools.plugins.rag_index_url import RagIndexUrlPlugin
 from app.tools.plugins.rag_upload import RagUploadPlugin
 from app.tools.plugins.weather_api import WeatherPlugin
 
@@ -52,6 +53,7 @@ ALL_PLUGINS: list[ToolPlugin] = [
     PaymentToLoanPlugin(),
     TransferredToSavingsPlugin(),
     RagUploadPlugin(),
+    RagIndexUrlPlugin(),
     RagSearchPlugin(),
     RagStatusPlugin(),
     RagListPlugin(),

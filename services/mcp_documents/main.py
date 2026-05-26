@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -22,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 
 _worker_task: asyncio.Task | None = None
 _reranker = None
+_session_start: datetime = datetime.now(timezone.utc)
 
 
 def _get_reranker():
@@ -35,7 +37,8 @@ def _get_reranker():
 
 @asynccontextmanager
 async def lifespan(app):
-    global _worker_task
+    global _worker_task, _session_start
+    _session_start = datetime.now(timezone.utc)
     await db.run_migrations()
     pending = await db.get_pending_documents()
     await rag_queue.requeue_interrupted([str(d["id"]) for d in pending])
@@ -125,19 +128,27 @@ async def rag_list(search_term: str | None = None, max_documents: int = 20) -> d
 
 
 @mcp.tool(name="rag_queue_status")
-async def rag_queue_status() -> list[dict]:
-    """Return the ordered list of documents pending or being processed."""
-    rows = await db.get_queue_status()
-    return [
-        {
-            "job_id": r["id"],
-            "s3_url": r["s3_url"],
-            "filename": r["filename"],
-            "status": r["status"],
-            "created_at": r["created_at"].isoformat(),
-        }
-        for r in rows
-    ]
+async def rag_queue_status() -> dict:
+    """Return pending/processing documents plus completed/failed documents indexed this session."""
+    rows = await db.get_full_queue_status(_session_start)
+    result = []
+    for r in rows:
+        result.append(
+            {
+                "job_id": r["id"],
+                "s3_url": r["s3_url"],
+                "filename": r["filename"],
+                "status": r["status"],
+                "created_at": r["created_at"].isoformat(),
+                "completed_at": r["completed_at"].isoformat() if r.get("completed_at") else None,
+                "chunk_count": r.get("chunk_count"),
+                "error": r.get("error"),
+            }
+        )
+    return {
+        "session_start": _session_start.isoformat(),
+        "documents": result,
+    }
 
 
 @mcp.tool(name="rag_search")
@@ -208,6 +219,67 @@ async def rag_delete(s3_url: str) -> dict:
     except Exception as e:
         result["s3_warning"] = f"Index removed but S3 delete failed: {e}"
     return result
+
+
+@mcp.tool(name="rag_index_url")
+async def rag_index_url(url: str) -> dict:
+    """Fetch a webpage, extract its text with trafilatura, upload to S3, and queue it for RAG indexing."""
+    import hashlib
+
+    import trafilatura
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=30,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; RAGBot/1.0)"},
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            html = resp.text
+    except Exception as e:
+        return {"error": f"Failed to fetch URL: {e}"}
+
+    text = trafilatura.extract(html, include_comments=False, include_tables=True)
+    if not text or not text.strip():
+        return {"error": "No readable content could be extracted from the URL"}
+
+    url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
+    s3_key = f"webpages/{url_hash}.txt"
+    s3_url_val = f"s3://{settings.bucket_name}/{s3_key}"
+
+    def _upload():
+        boto3.client(
+            "s3",
+            endpoint_url=settings.internal_s3_endpoint_url,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+            region_name=settings.region_name,
+            config=Config(signature_version="s3v4"),
+        ).put_object(
+            Bucket=settings.bucket_name,
+            Key=s3_key,
+            Body=text.encode("utf-8"),
+            ContentType="text/plain; charset=utf-8",
+        )
+
+    try:
+        await asyncio.to_thread(_upload)
+    except Exception as e:
+        return {"error": f"Failed to upload extracted text to S3: {e}"}
+
+    doc_id = uuid.uuid4()
+    await db.insert_document(doc_id, s3_url_val, url)
+    await rag_queue.enqueue(doc_id)
+    queue = await db.get_queue_status()
+    position = next((i + 1 for i, d in enumerate(queue) if d["id"] == str(doc_id)), 1)
+    return {
+        "job_id": str(doc_id),
+        "url": url,
+        "filename": url,
+        "s3_url": s3_url_val,
+        "position_in_queue": position,
+    }
 
 
 async def _summarize_text(text: str) -> str:

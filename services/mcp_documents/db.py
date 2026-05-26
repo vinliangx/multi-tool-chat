@@ -222,7 +222,9 @@ async def delete_document_by_s3_url(s3_url: str) -> dict[str, Any]:
         if not row:
             return {"error": f"No document found with s3_url: {s3_url}"}
         if row["status"] == "processing":
-            return {"error": f"Document '{row['filename']}' is currently processing. Try again once it completes."}
+            return {
+                "error": f"Document '{row['filename']}' is currently processing. Try again once it completes."
+            }
         doc_id = row["id"]
         await conn.execute("DELETE FROM rag.chunks WHERE document_id = $1", doc_id)
         await conn.execute("DELETE FROM rag.documents WHERE id = $1", doc_id)
@@ -242,8 +244,25 @@ async def get_queue_status() -> list[dict[str, Any]]:
             """
             SELECT id::text, s3_url, filename, status, created_at
             FROM rag.documents
-            WHERE status IN ('pending', 'processing','completed')
+            WHERE status IN ('pending', 'processing')
             ORDER BY created_at
             """
+        )
+        return [dict(r) for r in rows]
+
+
+async def get_full_queue_status(since: Any) -> list[dict[str, Any]]:
+    """Return pending/processing docs plus completed/failed docs created since `since`."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id::text, s3_url, filename, status, created_at, completed_at, error, chunk_count
+            FROM rag.documents
+            WHERE status IN ('pending', 'processing')
+               OR (status IN ('completed', 'failed') AND created_at >= $1)
+            ORDER BY created_at
+            """,
+            since,
         )
         return [dict(r) for r in rows]
